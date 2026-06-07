@@ -99,7 +99,7 @@ async function callGroq(key, messages, model) {
   const res = await fetch(GROQ_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.1 }),
+    body: JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.1 }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -109,9 +109,26 @@ async function callGroq(key, messages, model) {
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error('AI 응답이 비어있습니다');
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('레시피 JSON을 찾을 수 없습니다');
-  return JSON.parse(match[0]);
+  return parseGroqJSON(text);
+}
+
+function parseGroqJSON(text) {
+  // strip markdown code fences if present
+  const clean = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '').trim();
+  // find the outermost JSON object
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('AI가 JSON을 반환하지 않았습니다');
+  const jsonStr = clean.slice(start, end + 1);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (_) {
+    // try to fix common JSON issues
+    const fixed = jsonStr
+      .replace(/,\s*([}\]])/g, '$1')  // trailing commas
+      .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":'); // unquoted keys
+    return JSON.parse(fixed);
+  }
 }
 
 async function analyzeImageWithGroq(imageDataUrl, onProgress) {
@@ -732,13 +749,26 @@ async function analyzeYTURL() {
     } catch (_) {}
 
     activateStep(1);
-    const aiResult = await analyzeYouTubeWithGroq(url, videoTitle, (pct, label) => setProgress(pct, label));
+    let aiResult = null;
+    let aiError = null;
+    try {
+      aiResult = await analyzeYouTubeWithGroq(url, videoTitle, (pct, label) => setProgress(pct, label));
+    } catch (err) {
+      aiError = err;
+    }
 
-    activateStep(2); setProgress(88, '재료 정리 중...'); await delay(300);
-    activateStep(3); setProgress(95, '순서 정리 중...'); await delay(300);
-    activateStep(4); setProgress(100, '완성!'); await delay(400);
+    activateStep(2); setProgress(88, '재료 정리 중...'); await delay(200);
+    activateStep(3); setProgress(95, '순서 정리 중...'); await delay(200);
+    activateStep(4); setProgress(100, '완성!'); await delay(300);
 
-    const recipe = aiResultToRecipe(aiResult, null, null);
+    // Build recipe from AI result, or fallback from video title
+    let recipe;
+    if (aiResult) {
+      recipe = aiResultToRecipe(aiResult, null, null);
+    } else {
+      // Fallback: create editable skeleton from video title
+      recipe = makeFallbackRecipe(videoTitle || 'YouTube 레시피', aiError?.message);
+    }
     recipe.source.url = url;
     recipe.source.type = 'youtube';
     recipe.thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
@@ -747,10 +777,13 @@ async function analyzeYTURL() {
     state.pendingResult = recipe;
     renderResult(recipe);
     showScreen('result', 'forward');
+
+    if (aiError) {
+      setTimeout(() => showToast(`AI 오류: ${aiError.message}. 직접 수정 후 저장하세요.`, 5000), 500);
+    }
   } catch (err) {
-    console.error(err);
-    showScreen('home', 'back');
-    setTimeout(() => showAIError(err.message), 400);
+    console.error('analyzeYTURL fatal:', err);
+    showToast(`오류: ${err.message}`, 4000);
   }
 }
 
@@ -888,26 +921,31 @@ async function startProcessing(file) {
     try {
       activateStep(0); setProgress(10, '이미지 준비 중...'); await delay(300);
       activateStep(1);
-      const aiResult = await analyzeImageWithGroq(dataUrl, (pct, label) => setProgress(pct, label));
-      activateStep(2); setProgress(88, '재료 정리 중...'); await delay(300);
-      activateStep(3); setProgress(95, '순서 정리 중...'); await delay(300);
-      activateStep(4); setProgress(100, '완성!'); await delay(400);
+      let aiResult = null;
+      let aiError = null;
+      try {
+        aiResult = await analyzeImageWithGroq(dataUrl, (pct, label) => setProgress(pct, label));
+      } catch (err) {
+        if (err.message === 'no_key') { showAIKeyPrompt(() => startProcessing(file)); return; }
+        aiError = err;
+      }
+      activateStep(2); setProgress(88, '재료 정리 중...'); await delay(200);
+      activateStep(3); setProgress(95, '순서 정리 중...'); await delay(200);
+      activateStep(4); setProgress(100, '완성!'); await delay(300);
 
-      const recipe = aiResultToRecipe(aiResult, dataUrl, ssId);
+      const recipe = aiResult
+        ? aiResultToRecipe(aiResult, dataUrl, ssId)
+        : makeFallbackRecipe('새 레시피', aiError?.message, dataUrl, ssId);
       state.pendingResult = recipe;
       const ss = state.screenshots.find(s => s.id === ssId);
       if (ss) ss.pendingRecipeData = recipe;
       saveDB();
       renderResult(recipe);
       showScreen('result', 'forward');
+      if (aiError) setTimeout(() => showToast(`AI 오류: ${aiError.message}. 직접 수정 후 저장하세요.`, 5000), 500);
     } catch (err) {
-      console.error('Gemini error:', err);
-      if (err.message === 'no_key') {
-        showAIKeyPrompt(() => startProcessing(file));
-      } else {
-        showScreen('home', 'back');
-        setTimeout(() => showAIError(err.message), 400);
-      }
+      console.error('photo processing fatal:', err);
+      showToast(`오류: ${err.message}`, 4000);
     }
   } else {
     // ── OCR fallback path ────────────────────────────
@@ -967,6 +1005,26 @@ function aiResultToRecipe(gpt, imageDataUrl, ssId) {
     aiSummary: gpt.summary || '',
     savedAt: new Date().toISOString(),
     emoji: categoryEmoji(gpt.category || '기타'),
+  };
+}
+
+function makeFallbackRecipe(title, errMsg, imageDataUrl, ssId) {
+  return {
+    id: null,
+    title: title || '새 레시피',
+    category: '기타',
+    tags: [],
+    ingredients: [{ name: '', amount: '' }],
+    steps: [''],
+    source: { type: 'other', handle: '', url: '' },
+    thumbnail: imageDataUrl || null,
+    screenshotId: ssId || null,
+    favorite: false,
+    confidence: 0.3,
+    gptAnalyzed: false,
+    aiSummary: errMsg ? `AI 오류로 직접 입력이 필요합니다: ${errMsg}` : '직접 재료와 조리법을 입력해주세요.',
+    savedAt: new Date().toISOString(),
+    emoji: '🍽️',
   };
 }
 
