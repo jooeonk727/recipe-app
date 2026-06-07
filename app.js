@@ -9,25 +9,30 @@
 const SEED_RECIPES = [];
 
 // ── Recipe Extraction Prompt ──────────────────────────────────
-const RECIPE_PROMPT = `You are a Korean recipe extraction assistant. Analyze the provided content and extract all recipe information.
+const RECIPE_PROMPT = `당신은 한국 요리 레시피 전문 AI입니다. 주어진 정보를 분석해 최대한 정확하고 상세한 레시피를 추출하세요.
 
-Return ONLY valid JSON with this exact structure:
+반드시 아래 JSON 구조만 반환하세요 (마크다운, 코드블록 금지):
 {
-  "title": "레시피 제목",
-  "category": "한식|일식|중식|양식|디저트|음료|간식|채식|기타",
-  "ingredients": [{"name": "재료명", "amount": "수량 및 단위"}],
-  "steps": ["조리 단계 1", "조리 단계 2"],
-  "source": {"type": "instagram|youtube|blog|other", "handle": "@계정명 또는 채널명"},
-  "tags": ["태그1", "태그2"],
-  "summary": "레시피 한 줄 요약"
+  "title": "정확한 레시피 이름 (예: 제육볶음, 카르보나라)",
+  "category": "한식 또는 일식 또는 중식 또는 양식 또는 디저트 또는 음료 또는 간식 또는 채식 또는 기타",
+  "ingredients": [
+    {"name": "재료명", "amount": "정확한 수량과 단위 (예: 300g, 2큰술, 1개)"}
+  ],
+  "steps": [
+    "1단계: 구체적인 조리 방법을 완전한 문장으로",
+    "2단계: 온도, 시간, 불 세기 등 세부 정보 포함"
+  ],
+  "source": {"type": "youtube", "handle": "채널명"},
+  "tags": ["핵심 키워드 태그"],
+  "summary": "이 요리의 특징을 한 줄로"
 }
 
-Rules:
-- Extract all visible ingredients with their exact amounts
-- Write each cooking step as a clear, complete sentence in Korean
-- If text is in Korean, keep it in Korean
-- If information is not visible, use empty string or empty array
-- Do NOT make up information not visible in the content`;
+중요 규칙:
+- 재료는 모든 것을 빠짐없이 (양념, 고명 포함), 수량은 최대한 구체적으로
+- 조리 단계는 초보자도 따라할 수 있게 순서대로 상세히
+- 정확하지 않은 수량은 "적당량" 대신 일반적인 분량 추정값 사용
+- 제목은 영상의 실제 요리 이름으로 (채널명 X)
+- 반드시 한국어로 작성`;
 
 // ── OCR Fallback Corrections ──────────────────────────────────
 const CORRECTIONS = {
@@ -153,7 +158,18 @@ async function analyzeYouTubeWithGroq(url, videoTitle, onProgress) {
   onProgress(40, 'Groq AI로 레시피 추출 중...');
   const messages = [{
     role: 'user',
-    content: `다음 YouTube 요리 영상을 보고 레시피를 추출하세요.\n영상 제목: "${videoTitle}"\n영상 URL: ${url}\n\n${RECIPE_PROMPT}\n\n확실하지 않은 수량은 "적당량"으로 표기하세요.\nReturn ONLY the raw JSON object, no markdown, no code blocks.`,
+    content: `다음 YouTube 요리 영상의 레시피를 추출하세요.
+
+영상 제목: "${videoTitle}"
+영상 URL: ${url}
+
+위 영상 제목을 바탕으로:
+1. 정확한 요리 이름을 title로 사용
+2. 이 요리의 표준 레시피를 최대한 상세하게 작성
+3. 일반적인 분량(2인분 기준)으로 재료와 수량 제시
+4. 조리 단계는 최소 5단계 이상 상세히
+
+${RECIPE_PROMPT}`,
   }];
   const result = await callGroq(key, messages, GROQ_TEXT_MODEL);
   onProgress(90, '정리 중...');

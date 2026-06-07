@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="manifest.json" />
   <title>SnapRecipe</title>
-  <link rel="stylesheet" href="style.css?v=13" />
+  <link rel="stylesheet" href="style.css?v=14" />
 </head>
 <body>
 
@@ -57,6 +57,9 @@
 <div id="screen-home" class="screen">
   <div class="nav-bar" id="home-nav">
     <h1 class="nav-large-title">SnapRecipe</h1>
+    <button class="nav-add-btn" onclick="showScreen('upload','forward')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
   </div>
   <div class="segment-bar" id="cat-segment">
     <button class="segment active" onclick="selectCategory(this,'all')">전체</button>
@@ -192,6 +195,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <div class="hero-btn-group">
+        <button class="hero-btn" onclick="showScreen('upload','forward')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
         <button class="hero-btn" id="detail-fav-btn" onclick="toggleFavoriteDetail()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </button>
@@ -209,11 +215,9 @@
 <div id="screen-screenshots" class="screen">
   <div class="nav-bar">
     <h1 class="nav-large-title">보관함</h1>
-    <div class="nav-bar-actions">
-      <button class="nav-icon-btn" onclick="document.getElementById('ss-file-input').click()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
-    </div>
+    <button class="nav-add-btn" onclick="showScreen('upload','forward')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
     <input id="ss-file-input" type="file" accept="image/*" style="display:none" onchange="handleFileSelect(event)" />
   </div>
   <div class="filter-pills">
@@ -233,6 +237,9 @@
 <div id="screen-fridge" class="screen">
   <div class="nav-bar">
     <h1 class="nav-large-title">냉장고</h1>
+    <button class="nav-add-btn" onclick="showScreen('upload','forward')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
   </div>
   <div class="fridge-body">
     <div class="fridge-input-card">
@@ -259,6 +266,9 @@
   <div class="nav-bar">
     <h1 class="nav-large-title">식단 플래너</h1>
     <div class="nav-bar-actions">
+      <button class="nav-add-btn" onclick="showScreen('upload','forward')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
       <button class="nav-text-btn" onclick="clearWeeklyPlan()">초기화</button>
     </div>
   </div>
@@ -365,6 +375,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
