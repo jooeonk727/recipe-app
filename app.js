@@ -83,8 +83,6 @@ function saveDB() {
   } catch (e) { console.error('save error', e); }
 }
 
-function getAnthropicKey() { return localStorage.getItem('sr_anthropic_key') || ''; }
-function saveAnthropicKey(k) { localStorage.setItem('sr_anthropic_key', k.trim()); }
 
 // ── Screen Management ─────────────────────────────────────────
 const NAV_SCREENS = ['home', 'screenshots', 'fridge', 'planner'];
@@ -156,9 +154,6 @@ function handleLogin(provider) {
   saveDB();
   updateProfileUI();
   showScreen('home', 'forward');
-  if (!getAnthropicKey()) {
-    setTimeout(() => showAPIKeyPrompt(() => {}), 600);
-  }
 }
 
 function handleLogout() {
@@ -650,53 +645,49 @@ async function analyzeYTURL() {
   const videoId = extractYouTubeId(url);
   if (!videoId) { showToast('올바른 YouTube URL을 입력해 주세요'); return; }
 
-  const hasKey = !!getAnthropicKey();
-  if (!hasKey) {
-    showAPIKeyPrompt(() => {
-      if (getAnthropicKey()) analyzeYTURL();
-      else showToast('YouTube 분석에는 Anthropic API 키가 필요해요');
-    });
-    return;
-  }
-
-  // Show processing screen
   document.getElementById('preview-img').src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
   const ytSteps = [
     { icon: '🎬', label: '영상 정보 가져오는 중...' },
-    { icon: '🤖', label: 'Claude로 레시피 추출 중...' },
-    { icon: '🥕', label: '재료 정리 중...' },
-    { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
     { icon: '✅', label: '완성!' },
   ];
   renderProcSteps(ytSteps);
-  setProgress(0, 'YouTube 분석 시작...');
+  setProgress(0, 'YouTube 정보 가져오는 중...');
   showScreen('processing', 'forward');
 
   try {
-    activateStep(0); setProgress(10, '영상 정보 로드 중...');
+    activateStep(0); setProgress(30, '영상 제목 가져오는 중...');
 
-    activateStep(1);
-    const gptResult = await analyzeYouTubeWithClaude(url, (pct, label) => setProgress(pct, label));
+    let videoTitle = '';
+    try {
+      const oEmbed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+      if (oEmbed.ok) { const d = await oEmbed.json(); videoTitle = d.title || ''; }
+    } catch (_) {}
 
-    activateStep(2); setProgress(82, '재료 정리 중...'); await delay(300);
-    activateStep(3); setProgress(93, '순서 정리 중...'); await delay(300);
-    activateStep(4); setProgress(100, '완성!'); await delay(400);
+    activateStep(1); setProgress(100, '완성!'); await delay(400);
 
-    const recipe = gptResultToRecipe(gptResult, null, null);
-    // Store actual YouTube URL
-    recipe.source.url = url;
-    recipe.source.type = 'youtube';
-    if (!recipe.source.handle || recipe.source.handle === 'YouTube') {
-      recipe.source.handle = `youtube.com/watch?v=${videoId}`;
-    }
-    recipe.youtubeId = videoId;
-    recipe.thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    const recipe = {
+      id: null,
+      title: videoTitle || '새 레시피',
+      category: '기타',
+      tags: [],
+      ingredients: [{ name: '', amount: '' }],
+      steps: [''],
+      source: { type: 'youtube', handle: '', url },
+      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+      screenshotId: null,
+      favorite: false,
+      confidence: 0.5,
+      gptAnalyzed: false,
+      aiSummary: '',
+      savedAt: new Date().toISOString(),
+      emoji: '▶️',
+      youtubeId: videoId,
+    };
 
     state.pendingResult = recipe;
     renderResult(recipe);
     showScreen('result', 'forward');
   } catch (err) {
-    console.error(err);
     showToast(`오류: ${err.message}`);
     setTimeout(() => showScreen('home', 'back'), 2500);
   }
@@ -725,112 +716,11 @@ function handleFileSelect(e) {
 }
 function processFiles(files) { startProcessing(files[0]); }
 
-// ── Claude Vision Analysis ────────────────────────────────────
-async function analyzeImageWithClaude(imageDataUrl, onProgress) {
-  const key = getAnthropicKey();
-  if (!key) throw new Error('no_key');
 
-  onProgress(20, 'Claude에 이미지 전송 중...');
-
-  // Extract base64 data and media type from data URL
-  const [meta, b64] = imageDataUrl.split(',');
-  const mediaType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-          { type: 'text', text: GPT_SYSTEM + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
-        ],
-      }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const msg = err?.error?.message || `API 오류 (${response.status})`;
-    throw new Error(msg);
-  }
-
-  onProgress(80, '레시피 정보 정리 중...');
-  const data = await response.json();
-  const text = data.content?.[0]?.text?.trim();
-  if (!text) throw new Error('Claude 응답이 비어있습니다');
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('레시피 JSON을 찾을 수 없습니다');
-  return JSON.parse(jsonMatch[0]);
-}
-
-// ── YouTube URL Detection & Analysis ─────────────────────────
+// ── YouTube URL Detection ─────────────────────────────────────
 function extractYouTubeId(url) {
   const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
   return m ? m[1] : null;
-}
-
-async function analyzeYouTubeWithClaude(url, onProgress) {
-  const key = getAnthropicKey();
-  if (!key) throw new Error('no_key');
-
-  const videoId = extractYouTubeId(url);
-  onProgress(20, 'YouTube 영상 정보 가져오는 중...');
-
-  // Get title via oEmbed (CORS-friendly)
-  let videoTitle = '';
-  try {
-    const oEmbed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-    if (oEmbed.ok) { const d = await oEmbed.json(); videoTitle = d.title || ''; }
-  } catch (_) {}
-
-  onProgress(50, 'Claude로 레시피 추출 중...');
-
-  const prompt = `다음 YouTube 요리 영상의 제목을 보고 레시피를 추출하거나 합리적으로 추정해서 JSON으로 반환하세요.
-
-영상 제목: "${videoTitle}"
-영상 URL: ${url}
-
-${GPT_SYSTEM}
-
-주의: 실제 영상을 볼 수 없으므로 제목과 일반 지식 기반으로 최대한 정확한 레시피를 작성하세요. 확실하지 않은 수량은 "적당량"으로 표기하세요.
-Return ONLY the raw JSON object, no markdown, no code blocks.`;
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const msg = err?.error?.message || `API 오류 (${response.status})`;
-    throw new Error(msg);
-  }
-  onProgress(90, '정리 중...');
-  const data = await response.json();
-  const text = data.content?.[0]?.text?.trim();
-  if (!text) throw new Error('Claude 응답이 비어있습니다');
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('레시피 JSON을 찾을 수 없습니다');
-  return { ...JSON.parse(jsonMatch[0]), youtubeId: videoId, youtubeUrl: url };
 }
 
 // ── Tesseract OCR Fallback ────────────────────────────────────
@@ -905,48 +795,26 @@ async function startProcessing(file) {
   document.getElementById('preview-img').src = dataUrl;
   showScreen('processing', 'forward');
 
-  const hasKey = !!getAnthropicKey();
-  const steps = hasKey ? PROC_STEPS_GPT : PROC_STEPS_OCR;
-  renderProcSteps(steps);
-  setProgress(0, hasKey ? 'Claude로 분석 시작...' : 'OCR 분석 시작...');
+  renderProcSteps(PROC_STEPS_OCR);
+  setProgress(0, 'OCR 분석 시작...');
 
   try {
-    let recipe;
+    activateStep(0); setProgress(8, '이미지 분석 중...'); await delay(500);
+    activateStep(1);
+    let ocrText = '';
+    try {
+      ocrText = await runOCR(file, pct => setProgress(8 + pct * 0.5, `OCR ${Math.round(pct)}%`));
+    } catch (_) {}
+    setProgress(58, 'OCR 완료');
 
-    if (hasKey) {
-      // ── Claude Vision path ──────────────────────────
-      activateStep(0); setProgress(8, '이미지 준비 중...');
-      await delay(400);
+    activateStep(2);
+    const corrected = correctText(ocrText);
+    await delay(400); setProgress(68, '교정 완료');
 
-      activateStep(1);
-      const gptResult = await analyzeImageWithClaude(dataUrl, (pct, label) => setProgress(pct, label));
-      activateStep(2); setProgress(82, '재료 정리 중...'); await delay(300);
-      activateStep(3); setProgress(92, '순서 정리 중...'); await delay(300);
-      activateStep(4); setProgress(100, '완성!'); await delay(400);
+    activateStep(3); await delay(500); setProgress(90, '파싱 완료');
+    activateStep(4); setProgress(100, '완성!'); await delay(400);
 
-      recipe = gptResultToRecipe(gptResult, dataUrl, ssId);
-      recipe.gptAnalyzed = true;
-      recipe.confidence = 0.97;
-
-    } else {
-      // ── Tesseract OCR fallback ───────────────────────
-      activateStep(0); setProgress(8, '이미지 분석 중...'); await delay(500);
-      activateStep(1);
-      let ocrText = '';
-      try {
-        ocrText = await runOCR(file, pct => setProgress(8 + pct * 0.5, `OCR ${Math.round(pct)}%`));
-      } catch (_) {}
-      setProgress(58, 'OCR 완료');
-
-      activateStep(2);
-      const corrected = correctText(ocrText);
-      await delay(400); setProgress(68, '교정 완료');
-
-      activateStep(3); await delay(500); setProgress(90, '파싱 완료');
-      activateStep(4); setProgress(100, '완성!'); await delay(400);
-
-      recipe = parseRecipeFromText(corrected, dataUrl, ssId);
-    }
+    const recipe = parseRecipeFromText(corrected, dataUrl, ssId);
 
     state.pendingResult = recipe;
     const ss = state.screenshots.find(s => s.id === ssId);
@@ -958,12 +826,7 @@ async function startProcessing(file) {
 
   } catch (err) {
     console.error('Processing error:', err);
-    if (err.message === 'no_key') {
-      // Should not reach here since we branched on hasKey, but just in case
-      showToast('API 키를 설정해 주세요');
-    } else {
-      showToast(`오류: ${err.message}`);
-    }
+    showToast(`오류: ${err.message}`);
     setTimeout(() => showScreen('home', 'back'), 2500);
   }
 }
@@ -1453,54 +1316,6 @@ function clearWeeklyPlan() {
   state.weeklyPlan = {}; saveDB(); renderPlanner();
 }
 
-// ── API Key Management ────────────────────────────────────────
-function showAPIKeyPrompt(onSave) {
-  // Inline prompt — inject a temporary modal
-  const existing = document.getElementById('apikey-modal');
-  if (existing) existing.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'apikey-modal';
-  modal.className = 'sheet-backdrop';
-  modal.innerHTML = `
-    <div class="sheet" onclick="event.stopPropagation()">
-      <div class="sheet-handle"></div>
-      <h3 class="sheet-title">🤖 AI 분석 설정</h3>
-      <p style="font-size:14px;color:var(--label-2);line-height:1.6;margin-bottom:16px">
-        Anthropic API 키를 입력하면 <strong>Claude Vision</strong>으로<br>
-        스크린샷을 훨씬 정확하게 분석해요.<br>
-        키는 이 기기에만 저장되며 외부로 전송되지 않아요.
-      </p>
-      <div class="fridge-input-wrap" style="margin-bottom:12px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <input id="apikey-input" type="password" placeholder="sk-ant-..." value="${getAnthropicKey()}"
-          style="flex:1;border:none;background:none;outline:none;font-size:15px;font-family:monospace" />
-      </div>
-      <p style="font-size:11px;color:var(--label-3);margin-bottom:20px">
-        키 없이도 OCR(Tesseract)로 동작합니다
-      </p>
-      <div class="sheet-actions">
-        <button class="sheet-action-btn primary" onclick="saveAPIKey()">저장하고 분석 시작</button>
-        <button class="sheet-action-btn" onclick="skipAPIKey()">키 없이 계속</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  window._apiKeySaveCallback = onSave;
-  setTimeout(() => document.getElementById('apikey-input')?.focus(), 300);
-}
-
-function saveAPIKey() {
-  const key = document.getElementById('apikey-input')?.value.trim() || '';
-  if (key && !key.startsWith('sk-ant-')) { showToast('올바른 Anthropic API 키 형식이 아닙니다 (sk-ant-로 시작)'); return; }
-  saveAnthropicKey(key);
-  document.getElementById('apikey-modal')?.remove();
-  if (window._apiKeySaveCallback) window._apiKeySaveCallback();
-}
-
-function skipAPIKey() {
-  document.getElementById('apikey-modal')?.remove();
-  if (window._apiKeySaveCallback) window._apiKeySaveCallback();
-}
 
 // ── Toast ─────────────────────────────────────────────────────
 function showToast(msg, ms = 2400) {
@@ -1533,10 +1348,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.user) {
       updateProfileUI();
       showScreen('home', 'forward');
-      if (!getAnthropicKey()) {
-        setTimeout(() => showAPIKeyPrompt(() => {}), 600);
-      }
-    } else {
+        } else {
       showScreen('login', 'forward');
     }
   }, 2200);
@@ -1563,18 +1375,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Upload zone: ask for API key first time
-  const fab = document.getElementById('fab');
-  if (fab) {
-    fab.addEventListener('click', e => {
-      e.stopImmediatePropagation();
-      // If key never been asked, show prompt first
-      if (!localStorage.getItem('sr_key_asked')) {
-        localStorage.setItem('sr_key_asked', '1');
-        showAPIKeyPrompt(() => showScreen('upload', 'forward'));
-      } else {
-        showScreen('upload', 'forward');
-      }
-    }, true);
-  }
 });
