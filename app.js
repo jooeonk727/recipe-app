@@ -231,6 +231,9 @@ function handleLogin(provider) {
   saveDB();
   updateProfileUI();
   showScreen('home', 'forward');
+  if (!getAnthropicKey()) {
+    setTimeout(() => showAPIKeyPrompt(() => {}), 600);
+  }
 }
 
 function handleLogout() {
@@ -1588,10 +1591,17 @@ const _showScreen = showScreen;
 document.addEventListener('DOMContentLoaded', () => {
   loadDB();
 
-  // Splash → login or home
+  // Splash → login or home, then Claude key prompt if not set
   setTimeout(() => {
-    if (state.user) { updateProfileUI(); showScreen('home', 'forward'); }
-    else showScreen('login', 'forward');
+    if (state.user) {
+      updateProfileUI();
+      showScreen('home', 'forward');
+      if (!getAnthropicKey()) {
+        setTimeout(() => showAPIKeyPrompt(() => {}), 600);
+      }
+    } else {
+      showScreen('login', 'forward');
+    }
   }, 2200);
 
   // Animate splash dots
