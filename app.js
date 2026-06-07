@@ -83,75 +83,62 @@ function saveDB() {
 }
 
 
-// ── Gemini API ────────────────────────────────────────────────
-function getGeminiKey() { return localStorage.getItem('sr_gemini_key') || ''; }
-function saveGeminiKey(k) { localStorage.setItem('sr_gemini_key', k.trim()); }
+// ── Groq AI API (free tier, gsk_... key) ─────────────────────
+function getAIKey() {
+  const legacy = localStorage.getItem('sr_gemini_key');
+  if (legacy) { localStorage.setItem('sr_ai_key', legacy); localStorage.removeItem('sr_gemini_key'); }
+  return localStorage.getItem('sr_ai_key') || '';
+}
+function saveAIKey(k) { localStorage.setItem('sr_ai_key', k.trim()); }
 
-const GEMINI_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-];
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_TEXT_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_VISION_MODEL = 'llama-3.2-11b-vision-preview';
 
-const GEMINI_URL = (key, model) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-
-async function callGeminiModel(key, model, parts) {
-  const res = await fetch(GEMINI_URL(key, model), {
+async function callGroq(key, messages, model) {
+  const res = await fetch(GROQ_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts }] }),
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.1 }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const msg = err?.error?.message || `Gemini 오류 (${res.status})`;
-    const isQuota = res.status === 429 || msg.includes('quota') || msg.includes('Quota') || msg.includes('limit');
-    throw Object.assign(new Error(msg), { isQuota, status: res.status });
+    const msg = err?.error?.message || `AI 오류 (${res.status})`;
+    throw Object.assign(new Error(msg), { status: res.status });
   }
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!text) throw new Error('Gemini 응답이 비어있습니다');
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error('AI 응답이 비어있습니다');
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('레시피 JSON을 찾을 수 없습니다');
   return JSON.parse(match[0]);
 }
 
-async function callGemini(key, parts, onModelChange) {
-  let lastErr;
-  for (const model of GEMINI_MODELS) {
-    try {
-      if (onModelChange) onModelChange(model);
-      return await callGeminiModel(key, model, parts);
-    } catch (err) {
-      lastErr = err;
-      if (!err.isQuota && err.status !== 404) throw err; // non-quota error → don't retry
-    }
-  }
-  throw lastErr;
-}
-
-async function analyzeImageWithGemini(imageDataUrl, onProgress) {
-  const key = getGeminiKey();
+async function analyzeImageWithGroq(imageDataUrl, onProgress) {
+  const key = getAIKey();
   if (!key) throw new Error('no_key');
-  onProgress(20, 'Gemini에 이미지 전송 중...');
-  const [meta, b64] = imageDataUrl.split(',');
-  const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-  const result = await callGemini(key, [
-    { inlineData: { mimeType, data: b64 } },
-    { text: RECIPE_PROMPT + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
-  ], m => onProgress(20, `Gemini (${m}) 분석 중...`));
+  onProgress(20, 'Groq AI에 이미지 전송 중...');
+  const messages = [{
+    role: 'user',
+    content: [
+      { type: 'text', text: RECIPE_PROMPT + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
+      { type: 'image_url', image_url: { url: imageDataUrl } },
+    ],
+  }];
+  const result = await callGroq(key, messages, GROQ_VISION_MODEL);
   onProgress(85, '레시피 정리 중...');
   return result;
 }
 
-async function analyzeYouTubeWithGemini(url, videoTitle, onProgress) {
-  const key = getGeminiKey();
+async function analyzeYouTubeWithGroq(url, videoTitle, onProgress) {
+  const key = getAIKey();
   if (!key) throw new Error('no_key');
-  onProgress(40, 'Gemini로 레시피 추출 중...');
-  const result = await callGemini(key, [{
-    text: `다음 YouTube 요리 영상을 보고 레시피를 추출하세요.\n영상 제목: "${videoTitle}"\n영상 URL: ${url}\n\n${RECIPE_PROMPT}\n\n확실하지 않은 수량은 "적당량"으로 표기하세요.\nReturn ONLY the raw JSON object, no markdown, no code blocks.`,
-  }], m => onProgress(50, `${m} 모델로 분석 중...`));
+  onProgress(40, 'Groq AI로 레시피 추출 중...');
+  const messages = [{
+    role: 'user',
+    content: `다음 YouTube 요리 영상을 보고 레시피를 추출하세요.\n영상 제목: "${videoTitle}"\n영상 URL: ${url}\n\n${RECIPE_PROMPT}\n\n확실하지 않은 수량은 "적당량"으로 표기하세요.\nReturn ONLY the raw JSON object, no markdown, no code blocks.`,
+  }];
+  const result = await callGroq(key, messages, GROQ_TEXT_MODEL);
   onProgress(90, '정리 중...');
   return result;
 }
@@ -226,8 +213,8 @@ function handleLogin(provider) {
   saveDB();
   updateProfileUI();
   showScreen('home', 'forward');
-  if (!getGeminiKey()) {
-    setTimeout(() => showGeminiKeyPrompt(() => {}), 700);
+  if (!getAIKey()) {
+    setTimeout(() => showAIKeyPrompt(() => {}), 700);
   }
 }
 
@@ -630,7 +617,7 @@ function renderDetail(r) {
     </div>` : ''}
     <div class="detail-section">
       <div class="detail-footer-row">
-        <span class="detail-conf-label">AI 신뢰도 ${Math.round((r.confidence || 0.8) * 100)}%${r.gptAnalyzed ? ' · Gemini' : ''}</span>
+        <span class="detail-conf-label">AI 신뢰도 ${Math.round((r.confidence || 0.8) * 100)}%${r.gptAnalyzed ? ' · Groq' : ''}</span>
         <button class="detail-edit-btn" onclick="editRecipe('${r.id}')">수정하기</button>
       </div>
     </div>`;
@@ -720,15 +707,15 @@ async function analyzeYTURL() {
   const videoId = extractYouTubeId(url);
   if (!videoId) { showToast('올바른 YouTube URL을 입력해 주세요'); return; }
 
-  if (!getGeminiKey()) {
-    showGeminiKeyPrompt(() => analyzeYTURL());
+  if (!getAIKey()) {
+    showAIKeyPrompt(() => analyzeYTURL());
     return;
   }
 
   document.getElementById('preview-img').src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
   renderProcSteps([
     { icon: '🎬', label: '영상 정보 가져오는 중...' },
-    { icon: '✨', label: 'Gemini AI 분석 중...' },
+    { icon: '✨', label: 'Groq AI 분석 중...' },
     { icon: '🥕', label: '재료 정리 중...' },
     { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
     { icon: '✅', label: '완성!' },
@@ -745,7 +732,7 @@ async function analyzeYTURL() {
     } catch (_) {}
 
     activateStep(1);
-    const aiResult = await analyzeYouTubeWithGemini(url, videoTitle, (pct, label) => setProgress(pct, label));
+    const aiResult = await analyzeYouTubeWithGroq(url, videoTitle, (pct, label) => setProgress(pct, label));
 
     activateStep(2); setProgress(88, '재료 정리 중...'); await delay(300);
     activateStep(3); setProgress(95, '순서 정리 중...'); await delay(300);
@@ -768,23 +755,23 @@ async function analyzeYTURL() {
 }
 
 function showAIError(msg) {
-  const isQuota = msg && (msg.includes('quota') || msg.includes('Quota') || msg.includes('limit') || msg.includes('RESOURCE_EXHAUSTED'));
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
-      <div style="font-size:36px;text-align:center;margin-bottom:12px">${isQuota ? '⚠️' : '❌'}</div>
-      <h3 style="margin:0 0 10px;font-size:17px;font-weight:700;text-align:center;color:#1a1108">
-        ${isQuota ? 'API 쿼터 초과' : 'AI 분석 실패'}
-      </h3>
-      <p style="margin:0 0 16px;font-size:14px;color:#4a3d2e;line-height:1.6;text-align:center">
-        ${isQuota
-          ? '현재 API 키의 무료 한도를 초과했거나, 이 프로젝트에서 Gemini 무료 티어가 비활성화되어 있습니다.<br><br><b>해결 방법:</b><br>1. <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#cc5500">aistudio.google.com/apikey</a> 에서 새 API 키 생성<br>2. 앱에서 API 키 재입력'
-          : `오류: ${msg}`}
+      <div style="font-size:36px;text-align:center;margin-bottom:12px">⚠️</div>
+      <h3 style="margin:0 0 10px;font-size:17px;font-weight:700;text-align:center;color:#1a1108">AI 분석 실패</h3>
+      <p style="margin:0 0 16px;font-size:14px;color:#4a3d2e;line-height:1.7;text-align:left">
+        <b>Groq API 키</b>가 필요합니다.<br><br>
+        <b>키 발급 (무료, 1분):</b><br>
+        1. <b>console.groq.com</b> 접속 → 구글 로그인<br>
+        2. 좌측 <b>API Keys</b> → <b>Create API Key</b><br>
+        3. <code style="background:#f5ede0;padding:1px 5px;border-radius:4px">gsk_...</code> 키 복사<br>
+        4. 아래 <b>키 입력</b> 버튼 눌러 붙여넣기
       </p>
       <div style="display:flex;gap:10px">
         <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:12px;border:1.5px solid #e8ddd0;border-radius:12px;background:#fff;font-size:15px;cursor:pointer;color:#4a3d2e">닫기</button>
-        ${isQuota ? `<button onclick="this.closest('[style*=fixed]').remove();localStorage.removeItem('sr_gemini_key');showGeminiKeyPrompt(()=>{})" style="flex:1;padding:12px;border:none;border-radius:12px;background:#cc5500;color:#fff;font-size:15px;font-weight:600;cursor:pointer">키 재입력</button>` : ''}
+        <button onclick="this.closest('[style*=fixed]').remove();localStorage.removeItem('sr_ai_key');showAIKeyPrompt(()=>{})" style="flex:1;padding:12px;border:none;border-radius:12px;background:#cc5500;color:#fff;font-size:15px;font-weight:600;cursor:pointer">키 입력</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -843,7 +830,7 @@ function correctText(text) {
 // ── Processing Steps ──────────────────────────────────────────
 const PROC_STEPS_AI = [
   { icon: '🔍', label: '이미지 분석 중...' },
-  { icon: '✨', label: 'Gemini AI 분석 중...' },
+  { icon: '✨', label: 'Groq AI 분석 중...' },
   { icon: '🥕', label: '재료 추출 중...' },
   { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
   { icon: '✅', label: '완성!' },
@@ -892,16 +879,16 @@ async function startProcessing(file) {
   document.getElementById('preview-img').src = dataUrl;
   showScreen('processing', 'forward');
 
-  const hasKey = !!getGeminiKey();
+  const hasKey = !!getAIKey();
 
   if (hasKey) {
-    // ── Gemini AI path ──────────────────────────────
+    // ── Groq AI path ──────────────────────────────
     renderProcSteps(PROC_STEPS_AI);
-    setProgress(0, 'Gemini AI 분석 시작...');
+    setProgress(0, 'Groq AI 분석 시작...');
     try {
       activateStep(0); setProgress(10, '이미지 준비 중...'); await delay(300);
       activateStep(1);
-      const aiResult = await analyzeImageWithGemini(dataUrl, (pct, label) => setProgress(pct, label));
+      const aiResult = await analyzeImageWithGroq(dataUrl, (pct, label) => setProgress(pct, label));
       activateStep(2); setProgress(88, '재료 정리 중...'); await delay(300);
       activateStep(3); setProgress(95, '순서 정리 중...'); await delay(300);
       activateStep(4); setProgress(100, '완성!'); await delay(400);
@@ -916,7 +903,7 @@ async function startProcessing(file) {
     } catch (err) {
       console.error('Gemini error:', err);
       if (err.message === 'no_key') {
-        showGeminiKeyPrompt(() => startProcessing(file));
+        showAIKeyPrompt(() => startProcessing(file));
       } else {
         showScreen('home', 'back');
         setTimeout(() => showAIError(err.message), 400);
@@ -1098,7 +1085,7 @@ function renderResult(r) {
     <div class="result-confidence ${cls}">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span>${lbl} (${pct}%)</span>
-        ${r.gptAnalyzed ? '<span class="ai-chip">✨ Gemini</span>' : '<span class="ai-chip">🔤 OCR</span>'}
+        ${r.gptAnalyzed ? '<span class="ai-chip">✨ Groq</span>' : '<span class="ai-chip">🔤 OCR</span>'}
       </div>
       <div class="conf-bar-track"><div class="conf-bar-fill" style="width:${pct}%"></div></div>
       ${r.aiSummary ? `<p style="font-size:13px;font-weight:400;opacity:0.85;margin-top:2px">${esc(r.aiSummary)}</p>` : ''}
@@ -1441,44 +1428,46 @@ function clearWeeklyPlan() {
 }
 
 
-// ── Gemini Key Modal ──────────────────────────────────────────
-function showGeminiKeyPrompt(onSave) {
-  document.getElementById('gemini-key-modal')?.remove();
+// ── AI Key Modal ──────────────────────────────────────────────
+function showAIKeyPrompt(onSave) {
+  document.getElementById('ai-key-modal')?.remove();
   const modal = document.createElement('div');
-  modal.id = 'gemini-key-modal';
+  modal.id = 'ai-key-modal';
   modal.className = 'sheet-backdrop';
   modal.innerHTML = `
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="sheet-handle"></div>
-      <h3 class="sheet-title">✨ Google Gemini AI 설정</h3>
-      <p style="font-size:14px;color:var(--label-2);line-height:1.6;margin-bottom:16px">
-        <strong>무료</strong> Gemini API 키를 입력하면 사진과 YouTube 링크를<br>
+      <h3 class="sheet-title">✨ Groq AI 설정 (무료)</h3>
+      <p style="font-size:14px;color:var(--label-2);line-height:1.7;margin-bottom:16px">
+        <strong>Groq</strong> 무료 API 키를 입력하면 사진과 YouTube 링크를<br>
         AI가 자동으로 분석해 레시피를 만들어줘요.<br><br>
-        <strong>키 발급:</strong> <span style="color:var(--accent)">aistudio.google.com</span><br>
-        → Get API key → Create API key (30초, 카드 불필요)
+        <strong>키 발급 방법 (1분):</strong><br>
+        1. <span style="color:var(--accent);font-weight:600">console.groq.com</span> 에서 무료 가입<br>
+        2. API Keys → Create API Key 클릭<br>
+        3. 생성된 <code style="background:#f5ede0;padding:1px 4px;border-radius:4px">gsk_...</code> 키 복사 후 아래 입력
       </p>
       <div class="fridge-input-wrap" style="margin-bottom:12px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0;stroke:var(--accent)"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zM11 11V7M16 11V7"/></svg>
-        <input id="gemini-key-input" type="password" placeholder="AIza... 또는 AQ...."
-          value="${getGeminiKey()}"
+        <input id="ai-key-input" type="password" placeholder="gsk_..."
+          value="${getAIKey()}"
           style="flex:1;border:none;background:none;outline:none;font-size:15px;font-family:monospace;color:var(--label)" />
       </div>
       <div class="sheet-actions">
-        <button class="sheet-action-btn primary" onclick="saveGeminiKeyAndContinue()">저장하고 분석 시작</button>
-        <button class="sheet-action-btn" onclick="document.getElementById('gemini-key-modal')?.remove()">나중에</button>
+        <button class="sheet-action-btn primary" onclick="saveAIKeyAndContinue()">저장하고 분석 시작</button>
+        <button class="sheet-action-btn" onclick="document.getElementById('ai-key-modal')?.remove()">나중에</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
-  window._geminiKeyCb = onSave;
-  setTimeout(() => document.getElementById('gemini-key-input')?.focus(), 300);
+  window._aiKeyCb = onSave;
+  setTimeout(() => document.getElementById('ai-key-input')?.focus(), 300);
 }
 
-function saveGeminiKeyAndContinue() {
-  const key = document.getElementById('gemini-key-input')?.value.trim() || '';
+function saveAIKeyAndContinue() {
+  const key = document.getElementById('ai-key-input')?.value.trim() || '';
   if (!key) { showToast('API 키를 입력해주세요'); return; }
-  saveGeminiKey(key);
-  document.getElementById('gemini-key-modal')?.remove();
-  if (window._geminiKeyCb) { window._geminiKeyCb(); window._geminiKeyCb = null; }
+  saveAIKey(key);
+  document.getElementById('ai-key-modal')?.remove();
+  if (window._aiKeyCb) { window._aiKeyCb(); window._aiKeyCb = null; }
 }
 
 // ── Toast ─────────────────────────────────────────────────────
@@ -1512,8 +1501,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.user) {
       updateProfileUI();
       showScreen('home', 'forward');
-      if (!getGeminiKey()) {
-        setTimeout(() => showGeminiKeyPrompt(() => {}), 700);
+      if (!getAIKey()) {
+        setTimeout(() => showAIKeyPrompt(() => {}), 700);
       }
     } else {
       showScreen('login', 'forward');
