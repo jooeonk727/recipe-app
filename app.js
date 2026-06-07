@@ -7,87 +7,7 @@
 ═══════════════════════════════════════════════ */
 
 // ── Seed Data ─────────────────────────────────────────────────
-const SEED_RECIPES = [
-  {
-    id: 'seed-1', title: '간단 김치찌개', category: '한식',
-    tags: ['김치', '찌개', '간단'],
-    ingredients: [
-      { name: '묵은지', amount: '200g' }, { name: '돼지고기', amount: '100g' },
-      { name: '두부', amount: '1/2모' }, { name: '대파', amount: '1/2대' },
-      { name: '고춧가루', amount: '1큰술' }, { name: '다진마늘', amount: '1작은술' },
-    ],
-    steps: ['냄비에 기름을 두르고 돼지고기를 볶아 기름을 뺀다.', '김치를 넣고 함께 볶다가 물 500ml를 붓는다.', '두부와 대파를 넣고 10분 더 끓인다.', '고춧가루와 마늘로 간을 맞추고 완성한다.'],
-    source: { type: 'instagram', handle: '@yummy_korea', url: '' },
-    thumbnail: null, screenshotId: null, favorite: true, confidence: 0.91,
-    savedAt: new Date(Date.now() - 86400000 * 5).toISOString(), emoji: '🍲',
-  },
-  {
-    id: 'seed-2', title: '크림 파스타 (카르보나라)', category: '양식',
-    tags: ['파스타', '크림', '이탈리안'],
-    ingredients: [
-      { name: '스파게티', amount: '80g' }, { name: '베이컨', amount: '3줄' },
-      { name: '달걀노른자', amount: '2개' }, { name: '파마산치즈', amount: '30g' },
-      { name: '생크림', amount: '50ml' }, { name: '후추', amount: '약간' },
-    ],
-    steps: ['끓는 물에 소금 1큰술 + 스파게티를 9분 삶는다.', '베이컨을 팬에 바삭하게 굽는다.', '불 끄고 달걀노른자 + 치즈 + 생크림을 섞어 소스를 만든다.', '뜨거운 파스타에 소스를 빠르게 버무리고 후추를 뿌려 완성.'],
-    source: { type: 'youtube', handle: 'YummyItaly', url: '' },
-    thumbnail: null, screenshotId: null, favorite: false, confidence: 0.87,
-    savedAt: new Date(Date.now() - 86400000 * 3).toISOString(), emoji: '🍝',
-  },
-  {
-    id: 'seed-3', title: '매콤 제육볶음', category: '한식',
-    tags: ['제육', '돼지고기', '볶음', '매콤'],
-    ingredients: [
-      { name: '돼지고기 앞다리살', amount: '300g' }, { name: '양파', amount: '1/2개' },
-      { name: '대파', amount: '1대' }, { name: '고추장', amount: '2큰술' },
-      { name: '간장', amount: '1큰술' }, { name: '설탕', amount: '1큰술' },
-      { name: '참기름', amount: '1작은술' },
-    ],
-    steps: ['고추장, 간장, 설탕, 참기름을 섞어 양념장을 만든다.', '돼지고기에 양념장을 넣고 30분 재운다.', '달군 팬에 양파를 먼저 볶다가 고기를 넣는다.', '대파를 마지막에 넣어 1분 더 볶아 완성.'],
-    source: { type: 'blog', handle: '행복한밥상', url: '' },
-    thumbnail: null, screenshotId: null, favorite: true, confidence: 0.95,
-    savedAt: new Date(Date.now() - 86400000 * 2).toISOString(), emoji: '🥩',
-  },
-  {
-    id: 'seed-4', title: '두부 된장국', category: '한식',
-    tags: ['된장', '국', '두부', '건강식'],
-    ingredients: [
-      { name: '두부', amount: '1/2모' }, { name: '된장', amount: '1.5큰술' },
-      { name: '애호박', amount: '1/4개' }, { name: '표고버섯', amount: '2개' },
-      { name: '다시마 육수', amount: '600ml' }, { name: '다진마늘', amount: '1작은술' },
-    ],
-    steps: ['냄비에 다시마 육수를 붓고 된장을 풀어준다.', '두부와 애호박을 깍둑썰어 넣는다.', '표고버섯과 마늘을 추가하고 8분 끓인다.', '간을 보고 부족하면 소금으로 마무리.'],
-    source: { type: 'instagram', handle: '@healthymom_', url: '' },
-    thumbnail: null, screenshotId: null, favorite: false, confidence: 0.88,
-    savedAt: new Date(Date.now() - 86400000).toISOString(), emoji: '🍵',
-  },
-  {
-    id: 'seed-5', title: '봉골레 스파게티', category: '양식',
-    tags: ['봉골레', '파스타', '해산물'],
-    ingredients: [
-      { name: '스파게티', amount: '100g' }, { name: '바지락', amount: '200g' },
-      { name: '마늘', amount: '5쪽' }, { name: '화이트와인', amount: '50ml' },
-      { name: '올리브오일', amount: '3큰술' }, { name: '파슬리', amount: '약간' },
-    ],
-    steps: ['바지락은 해감 후 깨끗이 씻는다.', '올리브오일에 슬라이스 마늘을 볶다가 바지락과 와인을 넣는다.', '뚜껑 덮고 3분 찐 다음 국물을 남긴다.', '삶은 파스타와 조개 국물을 섞어 에멀전을 만들고 파슬리로 마무리.'],
-    source: { type: 'youtube', handle: 'PastaChef', url: '' },
-    thumbnail: null, screenshotId: null, favorite: false, confidence: 0.82,
-    savedAt: new Date(Date.now() - 3600000 * 6).toISOString(), emoji: '🦪',
-  },
-  {
-    id: 'seed-6', title: '계란 볶음밥', category: '한식',
-    tags: ['볶음밥', '계란', '빠른요리'],
-    ingredients: [
-      { name: '밥', amount: '1공기' }, { name: '계란', amount: '2개' },
-      { name: '대파', amount: '1/4대' }, { name: '간장', amount: '1큰술' },
-      { name: '참기름', amount: '1작은술' },
-    ],
-    steps: ['팬을 강불로 달구고 기름 두른다.', '계란을 스크램블해 절반 익으면 밥을 넣는다.', '간장, 대파 넣고 강불로 1분 볶는다.', '불 끄고 참기름 뿌려 완성.'],
-    source: { type: 'other', handle: '', url: '' },
-    thumbnail: null, screenshotId: null, favorite: true, confidence: 0.97,
-    savedAt: new Date().toISOString(), emoji: '🍳',
-  },
-];
+const SEED_RECIPES = [];
 
 // ── GPT Recipe Extraction Prompt ──────────────────────────────
 const GPT_SYSTEM = `You are a Korean recipe extraction assistant. Analyze the provided image (a recipe screenshot from Instagram, YouTube, or a blog) and extract all recipe information.
@@ -139,11 +59,14 @@ const state = {
 function loadDB() {
   try {
     const u = localStorage.getItem('sr_user');       if (u)  state.user = JSON.parse(u);
-    const r = localStorage.getItem('sr_recipes');    state.recipes = r ? JSON.parse(r) : [...SEED_RECIPES];
+    const r = localStorage.getItem('sr_recipes');
+    const all = r ? JSON.parse(r) : [];
+    // Remove old seed recipes
+    state.recipes = all.filter(x => !String(x.id).startsWith('seed-'));
     const ss = localStorage.getItem('sr_screenshots'); state.screenshots = ss ? JSON.parse(ss) : [];
     const fi = localStorage.getItem('sr_fridge');    state.fridgeItems = fi ? JSON.parse(fi) : [];
     const pl = localStorage.getItem('sr_plan');      state.weeklyPlan = pl ? JSON.parse(pl) : {};
-  } catch { state.recipes = [...SEED_RECIPES]; }
+  } catch { state.recipes = []; }
 }
 
 function saveDB() {

@@ -47,16 +47,8 @@
       <p class="login-tagline">인스타그램·유튜브 레시피를<br>사진 한 장으로 자동 정리</p>
     </div>
     <div class="login-actions">
-      <button class="login-btn kakao" onclick="handleLogin('kakao')">
-        <div class="login-btn-icon">💬</div>
-        <span>카카오로 시작하기</span>
-      </button>
-      <button class="login-btn google" onclick="handleLogin('google')">
-        <div class="login-btn-icon google-g">G</div>
-        <span>Google로 시작하기</span>
-      </button>
-      <button class="login-btn-ghost" onclick="handleLogin('guest')">둘러보기</button>
-      <p class="login-terms">로그인 정보는 이 기기에만 저장됩니다</p>
+      <button class="login-btn-start" onclick="handleLogin('guest')">시작하기</button>
+      <p class="login-terms">내 레시피는 이 기기에만 저장됩니다</p>
     </div>
   </div>
 </div>
@@ -105,15 +97,6 @@
     <button class="segment" onclick="selectCategory(this,'간식')">간식</button>
     <button class="segment" onclick="selectCategory(this,'채식')">채식</button>
   </div>
-  <!-- 크리에이터 랭킹 -->
-  <div class="ranking-section" id="ranking-section">
-    <div class="ranking-header">
-      <span class="ranking-title">🏆 크리에이터 랭킹</span>
-      <button class="ranking-more" onclick="showScreen('sources','forward')">전체보기</button>
-    </div>
-    <div class="ranking-scroll" id="ranking-scroll"></div>
-  </div>
-
   <p class="list-header" id="recipe-count"></p>
   <div id="recipe-grid" class="recipe-grid"></div>
   <div id="empty-state" class="empty-view hidden">
@@ -121,18 +104,6 @@
     <p class="empty-heading">레시피가 없어요</p>
     <p class="empty-body">+ 버튼으로 첫 레시피를 추가해보세요</p>
   </div>
-</div>
-
-<!-- ── SOURCES RANKING ── -->
-<div id="screen-sources" class="screen">
-  <div class="nav-bar secondary">
-    <button class="nav-back-btn" onclick="showScreen('home','back')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-    </button>
-    <h2 class="nav-title">크리에이터 랭킹</h2>
-    <div style="width:44px"></div>
-  </div>
-  <div class="sources-scroll" id="sources-body"></div>
 </div>
 
 <!-- ── UPLOAD ── -->
