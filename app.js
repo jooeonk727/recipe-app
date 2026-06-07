@@ -2,15 +2,14 @@
 
 /* ═══════════════════════════════════════════════
    SNAPRECIPE · app.js
-   UI: native-mobile rebuild
-   AI: Claude Vision + Tesseract fallback
+   AI: Gemini 2.0 Flash (free) + Tesseract OCR fallback
 ═══════════════════════════════════════════════ */
 
 // ── Seed Data ─────────────────────────────────────────────────
 const SEED_RECIPES = [];
 
-// ── GPT Recipe Extraction Prompt ──────────────────────────────
-const GPT_SYSTEM = `You are a Korean recipe extraction assistant. Analyze the provided image (a recipe screenshot from Instagram, YouTube, or a blog) and extract all recipe information.
+// ── Recipe Extraction Prompt ──────────────────────────────────
+const RECIPE_PROMPT = `You are a Korean recipe extraction assistant. Analyze the provided content and extract all recipe information.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -25,10 +24,10 @@ Return ONLY valid JSON with this exact structure:
 
 Rules:
 - Extract all visible ingredients with their exact amounts
-- Number each cooking step clearly
+- Write each cooking step as a clear, complete sentence in Korean
 - If text is in Korean, keep it in Korean
 - If information is not visible, use empty string or empty array
-- Do NOT make up information not visible in the image`;
+- Do NOT make up information not visible in the content`;
 
 // ── OCR Fallback Corrections ──────────────────────────────────
 const CORRECTIONS = {
@@ -83,6 +82,56 @@ function saveDB() {
   } catch (e) { console.error('save error', e); }
 }
 
+
+// ── Gemini API ────────────────────────────────────────────────
+function getGeminiKey() { return localStorage.getItem('sr_gemini_key') || ''; }
+function saveGeminiKey(k) { localStorage.setItem('sr_gemini_key', k.trim()); }
+
+const GEMINI_URL = key =>
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+
+async function callGemini(key, parts) {
+  const res = await fetch(GEMINI_URL(key), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts }] }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Gemini 오류 (${res.status})`);
+  }
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  if (!text) throw new Error('Gemini 응답이 비어있습니다');
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('레시피 JSON을 찾을 수 없습니다');
+  return JSON.parse(match[0]);
+}
+
+async function analyzeImageWithGemini(imageDataUrl, onProgress) {
+  const key = getGeminiKey();
+  if (!key) throw new Error('no_key');
+  onProgress(20, 'Gemini에 이미지 전송 중...');
+  const [meta, b64] = imageDataUrl.split(',');
+  const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const result = await callGemini(key, [
+    { inlineData: { mimeType, data: b64 } },
+    { text: RECIPE_PROMPT + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
+  ]);
+  onProgress(85, '레시피 정리 중...');
+  return result;
+}
+
+async function analyzeYouTubeWithGemini(url, videoTitle, onProgress) {
+  const key = getGeminiKey();
+  if (!key) throw new Error('no_key');
+  onProgress(40, 'Gemini로 레시피 추출 중...');
+  const result = await callGemini(key, [{
+    text: `다음 YouTube 요리 영상을 보고 레시피를 추출하세요.\n영상 제목: "${videoTitle}"\n영상 URL: ${url}\n\n${RECIPE_PROMPT}\n\n확실하지 않은 수량은 "적당량"으로 표기하세요.\nReturn ONLY the raw JSON object, no markdown, no code blocks.`,
+  }]);
+  onProgress(90, '정리 중...');
+  return result;
+}
 
 // ── Screen Management ─────────────────────────────────────────
 const NAV_SCREENS = ['home', 'screenshots', 'fridge', 'planner'];
@@ -154,6 +203,9 @@ function handleLogin(provider) {
   saveDB();
   updateProfileUI();
   showScreen('home', 'forward');
+  if (!getGeminiKey()) {
+    setTimeout(() => showGeminiKeyPrompt(() => {}), 700);
+  }
 }
 
 function handleLogout() {
@@ -555,7 +607,7 @@ function renderDetail(r) {
     </div>` : ''}
     <div class="detail-section">
       <div class="detail-footer-row">
-        <span class="detail-conf-label">AI 신뢰도 ${Math.round((r.confidence || 0.8) * 100)}%${r.gptAnalyzed ? ' · Claude' : ''}</span>
+        <span class="detail-conf-label">AI 신뢰도 ${Math.round((r.confidence || 0.8) * 100)}%${r.gptAnalyzed ? ' · Gemini' : ''}</span>
         <button class="detail-edit-btn" onclick="editRecipe('${r.id}')">수정하기</button>
       </div>
     </div>`;
@@ -645,49 +697,48 @@ async function analyzeYTURL() {
   const videoId = extractYouTubeId(url);
   if (!videoId) { showToast('올바른 YouTube URL을 입력해 주세요'); return; }
 
+  if (!getGeminiKey()) {
+    showGeminiKeyPrompt(() => analyzeYTURL());
+    return;
+  }
+
   document.getElementById('preview-img').src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-  const ytSteps = [
+  renderProcSteps([
     { icon: '🎬', label: '영상 정보 가져오는 중...' },
+    { icon: '✨', label: 'Gemini AI 분석 중...' },
+    { icon: '🥕', label: '재료 정리 중...' },
+    { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
     { icon: '✅', label: '완성!' },
-  ];
-  renderProcSteps(ytSteps);
-  setProgress(0, 'YouTube 정보 가져오는 중...');
+  ]);
+  setProgress(0, 'YouTube 분석 시작...');
   showScreen('processing', 'forward');
 
   try {
-    activateStep(0); setProgress(30, '영상 제목 가져오는 중...');
-
+    activateStep(0); setProgress(15, '영상 제목 가져오는 중...');
     let videoTitle = '';
     try {
       const oEmbed = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
       if (oEmbed.ok) { const d = await oEmbed.json(); videoTitle = d.title || ''; }
     } catch (_) {}
 
-    activateStep(1); setProgress(100, '완성!'); await delay(400);
+    activateStep(1);
+    const aiResult = await analyzeYouTubeWithGemini(url, videoTitle, (pct, label) => setProgress(pct, label));
 
-    const recipe = {
-      id: null,
-      title: videoTitle || '새 레시피',
-      category: '기타',
-      tags: [],
-      ingredients: [{ name: '', amount: '' }],
-      steps: [''],
-      source: { type: 'youtube', handle: '', url },
-      thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-      screenshotId: null,
-      favorite: false,
-      confidence: 0.5,
-      gptAnalyzed: false,
-      aiSummary: '',
-      savedAt: new Date().toISOString(),
-      emoji: '▶️',
-      youtubeId: videoId,
-    };
+    activateStep(2); setProgress(88, '재료 정리 중...'); await delay(300);
+    activateStep(3); setProgress(95, '순서 정리 중...'); await delay(300);
+    activateStep(4); setProgress(100, '완성!'); await delay(400);
+
+    const recipe = aiResultToRecipe(aiResult, null, null);
+    recipe.source.url = url;
+    recipe.source.type = 'youtube';
+    recipe.thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    recipe.youtubeId = videoId;
 
     state.pendingResult = recipe;
     renderResult(recipe);
     showScreen('result', 'forward');
   } catch (err) {
+    console.error(err);
     showToast(`오류: ${err.message}`);
     setTimeout(() => showScreen('home', 'back'), 2500);
   }
@@ -744,9 +795,9 @@ function correctText(text) {
 }
 
 // ── Processing Steps ──────────────────────────────────────────
-const PROC_STEPS_GPT = [
+const PROC_STEPS_AI = [
   { icon: '🔍', label: '이미지 분석 중...' },
-  { icon: '🤖', label: 'Claude에 전송 중...' },
+  { icon: '✨', label: 'Gemini AI 분석 중...' },
   { icon: '🥕', label: '재료 추출 중...' },
   { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
   { icon: '✅', label: '완성!' },
@@ -795,44 +846,71 @@ async function startProcessing(file) {
   document.getElementById('preview-img').src = dataUrl;
   showScreen('processing', 'forward');
 
-  renderProcSteps(PROC_STEPS_OCR);
-  setProgress(0, 'OCR 분석 시작...');
+  const hasKey = !!getGeminiKey();
 
-  try {
-    activateStep(0); setProgress(8, '이미지 분석 중...'); await delay(500);
-    activateStep(1);
-    let ocrText = '';
+  if (hasKey) {
+    // ── Gemini AI path ──────────────────────────────
+    renderProcSteps(PROC_STEPS_AI);
+    setProgress(0, 'Gemini AI 분석 시작...');
     try {
-      ocrText = await runOCR(file, pct => setProgress(8 + pct * 0.5, `OCR ${Math.round(pct)}%`));
-    } catch (_) {}
-    setProgress(58, 'OCR 완료');
+      activateStep(0); setProgress(10, '이미지 준비 중...'); await delay(300);
+      activateStep(1);
+      const aiResult = await analyzeImageWithGemini(dataUrl, (pct, label) => setProgress(pct, label));
+      activateStep(2); setProgress(88, '재료 정리 중...'); await delay(300);
+      activateStep(3); setProgress(95, '순서 정리 중...'); await delay(300);
+      activateStep(4); setProgress(100, '완성!'); await delay(400);
 
-    activateStep(2);
-    const corrected = correctText(ocrText);
-    await delay(400); setProgress(68, '교정 완료');
+      const recipe = aiResultToRecipe(aiResult, dataUrl, ssId);
+      state.pendingResult = recipe;
+      const ss = state.screenshots.find(s => s.id === ssId);
+      if (ss) ss.pendingRecipeData = recipe;
+      saveDB();
+      renderResult(recipe);
+      showScreen('result', 'forward');
+    } catch (err) {
+      console.error('Gemini error:', err);
+      if (err.message === 'no_key') {
+        showGeminiKeyPrompt(() => startProcessing(file));
+      } else {
+        showToast(`Gemini 오류: ${err.message}`);
+        setTimeout(() => showScreen('home', 'back'), 2500);
+      }
+    }
+  } else {
+    // ── OCR fallback path ────────────────────────────
+    renderProcSteps(PROC_STEPS_OCR);
+    setProgress(0, 'OCR 분석 시작...');
+    try {
+      activateStep(0); setProgress(8, '이미지 분석 중...'); await delay(500);
+      activateStep(1);
+      let ocrText = '';
+      try {
+        ocrText = await runOCR(file, pct => setProgress(8 + pct * 0.5, `OCR ${Math.round(pct)}%`));
+      } catch (_) {}
+      setProgress(58, 'OCR 완료');
+      activateStep(2);
+      const corrected = correctText(ocrText);
+      await delay(400); setProgress(68, '교정 완료');
+      activateStep(3); await delay(500); setProgress(90, '파싱 완료');
+      activateStep(4); setProgress(100, '완성!'); await delay(400);
 
-    activateStep(3); await delay(500); setProgress(90, '파싱 완료');
-    activateStep(4); setProgress(100, '완성!'); await delay(400);
-
-    const recipe = parseRecipeFromText(corrected, dataUrl, ssId);
-
-    state.pendingResult = recipe;
-    const ss = state.screenshots.find(s => s.id === ssId);
-    if (ss) ss.pendingRecipeData = recipe;
-    saveDB();
-
-    renderResult(recipe);
-    showScreen('result', 'forward');
-
-  } catch (err) {
-    console.error('Processing error:', err);
-    showToast(`오류: ${err.message}`);
-    setTimeout(() => showScreen('home', 'back'), 2500);
+      const recipe = parseRecipeFromText(corrected, dataUrl, ssId);
+      state.pendingResult = recipe;
+      const ss = state.screenshots.find(s => s.id === ssId);
+      if (ss) ss.pendingRecipeData = recipe;
+      saveDB();
+      renderResult(recipe);
+      showScreen('result', 'forward');
+    } catch (err) {
+      console.error('OCR error:', err);
+      showToast(`오류: ${err.message}`);
+      setTimeout(() => showScreen('home', 'back'), 2500);
+    }
   }
 }
 
-// ── GPT Result → Recipe Object ────────────────────────────────
-function gptResultToRecipe(gpt, imageDataUrl, ssId) {
+// ── AI Result → Recipe Object ─────────────────────────────────
+function aiResultToRecipe(gpt, imageDataUrl, ssId) {
   const ingredients = (gpt.ingredients || []).map(i =>
     typeof i === 'string' ? { name: i, amount: '' } : { name: i.name || '', amount: i.amount || '' }
   ).filter(i => i.name);
@@ -974,7 +1052,7 @@ function renderResult(r) {
     <div class="result-confidence ${cls}">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span>${lbl} (${pct}%)</span>
-        ${r.gptAnalyzed ? '<span class="ai-chip">🤖 Claude</span>' : '<span class="ai-chip">🔤 OCR</span>'}
+        ${r.gptAnalyzed ? '<span class="ai-chip">✨ Gemini</span>' : '<span class="ai-chip">🔤 OCR</span>'}
       </div>
       <div class="conf-bar-track"><div class="conf-bar-fill" style="width:${pct}%"></div></div>
       ${r.aiSummary ? `<p style="font-size:13px;font-weight:400;opacity:0.85;margin-top:2px">${esc(r.aiSummary)}</p>` : ''}
@@ -1317,6 +1395,47 @@ function clearWeeklyPlan() {
 }
 
 
+// ── Gemini Key Modal ──────────────────────────────────────────
+function showGeminiKeyPrompt(onSave) {
+  document.getElementById('gemini-key-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'gemini-key-modal';
+  modal.className = 'sheet-backdrop';
+  modal.innerHTML = `
+    <div class="sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <h3 class="sheet-title">✨ Google Gemini AI 설정</h3>
+      <p style="font-size:14px;color:var(--label-2);line-height:1.6;margin-bottom:16px">
+        <strong>무료</strong> Gemini API 키를 입력하면 사진과 YouTube 링크를<br>
+        AI가 자동으로 분석해 레시피를 만들어줘요.<br><br>
+        <strong>키 발급:</strong> <span style="color:var(--accent)">aistudio.google.com</span><br>
+        → Get API key → Create API key (30초, 카드 불필요)
+      </p>
+      <div class="fridge-input-wrap" style="margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0;stroke:var(--accent)"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zM11 11V7M16 11V7"/></svg>
+        <input id="gemini-key-input" type="password" placeholder="AIza..."
+          value="${getGeminiKey()}"
+          style="flex:1;border:none;background:none;outline:none;font-size:15px;font-family:monospace;color:var(--label)" />
+      </div>
+      <div class="sheet-actions">
+        <button class="sheet-action-btn primary" onclick="saveGeminiKeyAndContinue()">저장하고 분석 시작</button>
+        <button class="sheet-action-btn" onclick="document.getElementById('gemini-key-modal')?.remove()">나중에</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  window._geminiKeyCb = onSave;
+  setTimeout(() => document.getElementById('gemini-key-input')?.focus(), 300);
+}
+
+function saveGeminiKeyAndContinue() {
+  const key = document.getElementById('gemini-key-input')?.value.trim() || '';
+  if (!key) { showToast('API 키를 입력해주세요'); return; }
+  if (!key.startsWith('AIza')) { showToast('올바른 Gemini 키 형식이 아닙니다 (AIza로 시작)'); return; }
+  saveGeminiKey(key);
+  document.getElementById('gemini-key-modal')?.remove();
+  if (window._geminiKeyCb) { window._geminiKeyCb(); window._geminiKeyCb = null; }
+}
+
 // ── Toast ─────────────────────────────────────────────────────
 function showToast(msg, ms = 2400) {
   const t = document.getElementById('toast');
@@ -1343,12 +1462,15 @@ const _showScreen = showScreen;
 document.addEventListener('DOMContentLoaded', () => {
   loadDB();
 
-  // Splash → login or home, then Claude key prompt if not set
+  // Splash → login or home; show Gemini key prompt if not set
   setTimeout(() => {
     if (state.user) {
       updateProfileUI();
       showScreen('home', 'forward');
-        } else {
+      if (!getGeminiKey()) {
+        setTimeout(() => showGeminiKeyPrompt(() => {}), 700);
+      }
+    } else {
       showScreen('login', 'forward');
     }
   }, 2200);
