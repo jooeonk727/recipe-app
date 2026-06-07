@@ -404,7 +404,10 @@ function renderHome() {
   const grid = document.getElementById('recipe-grid');
   const empty = document.getElementById('empty-state');
   if (!grid) return;
-  const recipes = state.recipes.slice().sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+  const cat = state.filters.category || 'all';
+  const recipes = state.recipes
+    .filter(r => cat === 'all' || r.category === cat)
+    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
   if (!recipes.length) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   grid.innerHTML = recipes.map(recipeCardHTML).join('');

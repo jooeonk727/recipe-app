@@ -58,6 +58,17 @@
   <div class="nav-bar" id="home-nav">
     <h1 class="nav-large-title">SnapRecipe</h1>
   </div>
+  <div class="segment-bar" id="cat-segment">
+    <button class="segment active" onclick="selectCategory(this,'all')">전체</button>
+    <button class="segment" onclick="selectCategory(this,'한식')">한식</button>
+    <button class="segment" onclick="selectCategory(this,'양식')">양식</button>
+    <button class="segment" onclick="selectCategory(this,'일식')">일식</button>
+    <button class="segment" onclick="selectCategory(this,'중식')">중식</button>
+    <button class="segment" onclick="selectCategory(this,'디저트')">디저트</button>
+    <button class="segment" onclick="selectCategory(this,'음료')">음료</button>
+    <button class="segment" onclick="selectCategory(this,'간식')">간식</button>
+    <button class="segment" onclick="selectCategory(this,'채식')">채식</button>
+  </div>
   <div id="recipe-grid" class="recipe-grid"></div>
   <div id="empty-state" class="empty-view hidden">
     <p class="empty-heading">아직 레시피가 없어요</p>
