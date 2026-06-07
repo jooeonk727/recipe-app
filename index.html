@@ -57,52 +57,11 @@
 <div id="screen-home" class="screen">
   <div class="nav-bar" id="home-nav">
     <h1 class="nav-large-title">SnapRecipe</h1>
-    <div class="nav-bar-actions">
-      <button class="nav-icon-btn" onclick="toggleSearch()" id="search-toggle-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      </button>
-      <button class="nav-icon-btn" onclick="toggleSortMenu()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
-      </button>
-      <button class="nav-avatar" id="profile-avatar" onclick="showProfile()">👤</button>
-    </div>
   </div>
-  <div id="sort-menu" class="dropdown-menu hidden">
-    <button class="dropdown-item" onclick="applySort('newest')">
-      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"/></svg>
-      최신순
-    </button>
-    <button class="dropdown-item" onclick="applySort('oldest')">오래된순</button>
-    <button class="dropdown-item" onclick="applySort('favorite')">즐겨찾기순</button>
-    <button class="dropdown-item" onclick="applySort('name')">이름순</button>
-  </div>
-  <div id="search-bar" class="search-bar hidden">
-    <div class="search-input-wrap">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input id="search-input" type="search" placeholder="레시피, 재료, 태그 검색" oninput="applyFilters()" />
-      <button onclick="clearSearch()" id="search-clear-btn" class="hidden">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
-      </button>
-    </div>
-    <button class="search-cancel-btn" onclick="cancelSearch()">취소</button>
-  </div>
-  <div class="segment-bar" id="cat-segment">
-    <button class="segment active" onclick="selectCategory(this,'all')">전체</button>
-    <button class="segment" onclick="selectCategory(this,'한식')">한식</button>
-    <button class="segment" onclick="selectCategory(this,'양식')">양식</button>
-    <button class="segment" onclick="selectCategory(this,'일식')">일식</button>
-    <button class="segment" onclick="selectCategory(this,'중식')">중식</button>
-    <button class="segment" onclick="selectCategory(this,'디저트')">디저트</button>
-    <button class="segment" onclick="selectCategory(this,'음료')">음료</button>
-    <button class="segment" onclick="selectCategory(this,'간식')">간식</button>
-    <button class="segment" onclick="selectCategory(this,'채식')">채식</button>
-  </div>
-  <p class="list-header" id="recipe-count"></p>
   <div id="recipe-grid" class="recipe-grid"></div>
   <div id="empty-state" class="empty-view hidden">
-    <div class="empty-icon-wrap">📭</div>
-    <p class="empty-heading">레시피가 없어요</p>
-    <p class="empty-body">+ 버튼으로 첫 레시피를 추가해보세요</p>
+    <p class="empty-heading">아직 레시피가 없어요</p>
+    <p class="empty-body">아래 + 버튼으로 첫 레시피를 추가해보세요</p>
   </div>
 </div>
 

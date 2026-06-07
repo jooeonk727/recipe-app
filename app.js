@@ -57,11 +57,15 @@ const state = {
 
 // ── Persistence ───────────────────────────────────────────────
 function loadDB() {
+  // Force-clear all seed data on first load after v2
+  if (!localStorage.getItem('sr_v2')) {
+    ['sr_recipes','sr_screenshots','sr_fridge','sr_plan'].forEach(k => localStorage.removeItem(k));
+    localStorage.setItem('sr_v2', '1');
+  }
   try {
     const u = localStorage.getItem('sr_user');       if (u)  state.user = JSON.parse(u);
     const r = localStorage.getItem('sr_recipes');
     const all = r ? JSON.parse(r) : [];
-    // Remove old seed recipes
     state.recipes = all.filter(x => !String(x.id).startsWith('seed-'));
     const ss = localStorage.getItem('sr_screenshots'); state.screenshots = ss ? JSON.parse(ss) : [];
     const fi = localStorage.getItem('sr_fridge');    state.fridgeItems = fi ? JSON.parse(fi) : [];
@@ -123,9 +127,7 @@ function showScreen(id, direction = 'forward') {
     fab.classList.remove('visible');
   }
 
-  // Close menus
-  document.getElementById('sort-menu')?.classList.add('hidden');
-  cancelSearch();
+  // Close menus (no-op if elements removed)
 
   if (id === 'home')        renderHome();
   if (id === 'screenshots') renderScreenshots();
@@ -401,11 +403,8 @@ function filterBySource(handle) {
 function renderHome() {
   const grid = document.getElementById('recipe-grid');
   const empty = document.getElementById('empty-state');
-  const count = document.getElementById('recipe-count');
   if (!grid) return;
-  const recipes = getFilteredRecipes();
-  count.textContent = `${recipes.length}개`;
-  renderSourceRanking();
+  const recipes = state.recipes.slice().sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
   if (!recipes.length) { grid.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   grid.innerHTML = recipes.map(recipeCardHTML).join('');
