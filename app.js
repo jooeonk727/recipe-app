@@ -117,14 +117,14 @@ function showScreen(id, direction = 'forward') {
   const nav = document.getElementById('bottom-nav');
   const fab = document.getElementById('fab');
   if (NAV_SCREENS.includes(id)) {
-    nav.classList.add('visible');
-    fab.classList.add('visible');
+    nav?.classList.add('visible');
+    fab?.classList.add('visible');
     document.querySelectorAll('.tab-item').forEach(item =>
       item.classList.toggle('active', item.dataset.screen === id)
     );
   } else {
-    nav.classList.remove('visible');
-    fab.classList.remove('visible');
+    nav?.classList.remove('visible');
+    fab?.classList.remove('visible');
   }
 
   // Close menus (no-op if elements removed)
@@ -404,6 +404,9 @@ function renderHome() {
   const grid = document.getElementById('recipe-grid');
   const empty = document.getElementById('empty-state');
   if (!grid) return;
+  // Ensure FAB and nav are visible on home
+  document.getElementById('bottom-nav')?.classList.add('visible');
+  document.getElementById('fab')?.classList.add('visible');
   const cat = state.filters.category || 'all';
   const recipes = state.recipes
     .filter(r => cat === 'all' || r.category === cat)
