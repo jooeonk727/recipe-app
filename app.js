@@ -817,7 +817,7 @@ async function analyzeImageWithClaude(imageDataUrl, onProgress) {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       messages: [{
         role: 'user',
@@ -831,15 +831,17 @@ async function analyzeImageWithClaude(imageDataUrl, onProgress) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    const msg = err?.error?.message || `HTTP ${response.status}`;
+    const msg = err?.error?.message || `API 오류 (${response.status})`;
     throw new Error(msg);
   }
 
   onProgress(80, '레시피 정보 정리 중...');
   const data = await response.json();
-  const text = data.content[0].text.trim();
+  const text = data.content?.[0]?.text?.trim();
+  if (!text) throw new Error('Claude 응답이 비어있습니다');
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+  if (!jsonMatch) throw new Error('레시피 JSON을 찾을 수 없습니다');
+  return JSON.parse(jsonMatch[0]);
 }
 
 // ── YouTube URL Detection & Analysis ─────────────────────────
@@ -883,18 +885,24 @@ Return ONLY the raw JSON object, no markdown, no code blocks.`;
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
 
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const msg = err?.error?.message || `API 오류 (${response.status})`;
+    throw new Error(msg);
+  }
   onProgress(90, '정리 중...');
   const data = await response.json();
-  const text = data.content[0].text.trim();
+  const text = data.content?.[0]?.text?.trim();
+  if (!text) throw new Error('Claude 응답이 비어있습니다');
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  return { ...JSON.parse(jsonMatch ? jsonMatch[0] : text), youtubeId: videoId, youtubeUrl: url };
+  if (!jsonMatch) throw new Error('레시피 JSON을 찾을 수 없습니다');
+  return { ...JSON.parse(jsonMatch[0]), youtubeId: videoId, youtubeUrl: url };
 }
 
 // ── Tesseract OCR Fallback ────────────────────────────────────
@@ -1171,6 +1179,7 @@ function renderResult(r) {
   const lbl = conf >= 0.9 ? '✅ 높은 신뢰도' : conf >= 0.6 ? '⚠️ 확인 권장' : '❗ 직접 수정 필요';
 
   document.getElementById('result-body').innerHTML = `
+    ${r.thumbnail ? `<div class="result-thumb-wrap"><img class="result-thumb-img" src="${r.thumbnail}" alt="" /></div>` : ''}
     <div class="result-confidence ${cls}">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span>${lbl} (${pct}%)</span>
