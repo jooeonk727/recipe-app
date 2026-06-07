@@ -3,7 +3,7 @@
 /* ═══════════════════════════════════════════════
    SNAPRECIPE · app.js
    UI: native-mobile rebuild
-   AI: GPT-4o Vision + Tesseract fallback
+   AI: Claude Vision + Tesseract fallback
 ═══════════════════════════════════════════════ */
 
 // ── Seed Data ─────────────────────────────────────────────────
@@ -156,8 +156,8 @@ function saveDB() {
   } catch (e) { console.error('save error', e); }
 }
 
-function getOpenAIKey() { return localStorage.getItem('sr_openai_key') || ''; }
-function saveOpenAIKey(k) { localStorage.setItem('sr_openai_key', k.trim()); }
+function getAnthropicKey() { return localStorage.getItem('sr_anthropic_key') || ''; }
+function saveAnthropicKey(k) { localStorage.setItem('sr_anthropic_key', k.trim()); }
 
 // ── Screen Management ─────────────────────────────────────────
 const NAV_SCREENS = ['home', 'screenshots', 'fridge', 'planner'];
@@ -629,7 +629,7 @@ function renderDetail(r) {
     </div>` : ''}
     <div class="detail-section">
       <div class="detail-footer-row">
-        <span class="detail-conf-label">AI 신뢰도 ${Math.round((r.confidence || 0.8) * 100)}%${r.gptAnalyzed ? ' · GPT-4o' : ''}</span>
+        <span class="detail-conf-label">AI 신뢰도 ${Math.round((r.confidence || 0.8) * 100)}%${r.gptAnalyzed ? ' · Claude' : ''}</span>
         <button class="detail-edit-btn" onclick="editRecipe('${r.id}')">수정하기</button>
       </div>
     </div>`;
@@ -719,11 +719,11 @@ async function analyzeYTURL() {
   const videoId = extractYouTubeId(url);
   if (!videoId) { showToast('올바른 YouTube URL을 입력해 주세요'); return; }
 
-  const hasKey = !!getOpenAIKey();
+  const hasKey = !!getAnthropicKey();
   if (!hasKey) {
     showAPIKeyPrompt(() => {
-      if (getOpenAIKey()) analyzeYTURL();
-      else showToast('YouTube 분석에는 OpenAI API 키가 필요해요');
+      if (getAnthropicKey()) analyzeYTURL();
+      else showToast('YouTube 분석에는 Anthropic API 키가 필요해요');
     });
     return;
   }
@@ -732,7 +732,7 @@ async function analyzeYTURL() {
   document.getElementById('preview-img').src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
   const ytSteps = [
     { icon: '🎬', label: '영상 정보 가져오는 중...' },
-    { icon: '🤖', label: 'GPT-4o로 레시피 추출 중...' },
+    { icon: '🤖', label: 'Claude로 레시피 추출 중...' },
     { icon: '🥕', label: '재료 정리 중...' },
     { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
     { icon: '✅', label: '완성!' },
@@ -745,7 +745,7 @@ async function analyzeYTURL() {
     activateStep(0); setProgress(10, '영상 정보 로드 중...');
 
     activateStep(1);
-    const gptResult = await analyzeYouTubeWithGPT(url, (pct, label) => setProgress(pct, label));
+    const gptResult = await analyzeYouTubeWithClaude(url, (pct, label) => setProgress(pct, label));
 
     activateStep(2); setProgress(82, '재료 정리 중...'); await delay(300);
     activateStep(3); setProgress(93, '순서 정리 중...'); await delay(300);
@@ -794,30 +794,35 @@ function handleFileSelect(e) {
 }
 function processFiles(files) { startProcessing(files[0]); }
 
-// ── GPT-4o Vision Analysis ────────────────────────────────────
-async function analyzeImageWithGPT(imageDataUrl, onProgress) {
-  const key = getOpenAIKey();
+// ── Claude Vision Analysis ────────────────────────────────────
+async function analyzeImageWithClaude(imageDataUrl, onProgress) {
+  const key = getAnthropicKey();
   if (!key) throw new Error('no_key');
 
-  onProgress(20, 'GPT-4o에 이미지 전송 중...');
+  onProgress(20, 'Claude에 이미지 전송 중...');
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Extract base64 data and media type from data URL
+  const [meta, b64] = imageDataUrl.split(',');
+  const mediaType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`,
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: 'claude-opus-4-5',
+      max_tokens: 2000,
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: GPT_SYSTEM },
-          { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+          { type: 'text', text: GPT_SYSTEM + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
         ],
       }],
-      max_tokens: 2000,
-      response_format: { type: 'json_object' },
     }),
   });
 
@@ -829,7 +834,9 @@ async function analyzeImageWithGPT(imageDataUrl, onProgress) {
 
   onProgress(80, '레시피 정보 정리 중...');
   const data = await response.json();
-  return JSON.parse(data.choices[0].message.content);
+  const text = data.content[0].text.trim();
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch ? jsonMatch[0] : text);
 }
 
 // ── YouTube URL Detection & Analysis ─────────────────────────
@@ -838,8 +845,8 @@ function extractYouTubeId(url) {
   return m ? m[1] : null;
 }
 
-async function analyzeYouTubeWithGPT(url, onProgress) {
-  const key = getOpenAIKey();
+async function analyzeYouTubeWithClaude(url, onProgress) {
+  const key = getAnthropicKey();
   if (!key) throw new Error('no_key');
 
   const videoId = extractYouTubeId(url);
@@ -852,7 +859,7 @@ async function analyzeYouTubeWithGPT(url, onProgress) {
     if (oEmbed.ok) { const d = await oEmbed.json(); videoTitle = d.title || ''; }
   } catch (_) {}
 
-  onProgress(50, 'GPT-4o로 레시피 추출 중...');
+  onProgress(50, 'Claude로 레시피 추출 중...');
 
   const prompt = `다음 YouTube 요리 영상의 제목을 보고 레시피를 추출하거나 합리적으로 추정해서 JSON으로 반환하세요.
 
@@ -861,26 +868,30 @@ async function analyzeYouTubeWithGPT(url, onProgress) {
 
 ${GPT_SYSTEM}
 
-주의: 실제 영상을 볼 수 없으므로 제목과 일반 지식 기반으로 최대한 정확한 레시피를 작성하세요. 확실하지 않은 수량은 "적당량"으로 표기하세요.`;
+주의: 실제 영상을 볼 수 없으므로 제목과 일반 지식 기반으로 최대한 정확한 레시피를 작성하세요. 확실하지 않은 수량은 "적당량"으로 표기하세요.
+Return ONLY the raw JSON object, no markdown, no code blocks.`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`,
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
+      model: 'claude-opus-4-5',
       max_tokens: 2000,
-      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt }],
     }),
   });
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   onProgress(90, '정리 중...');
   const data = await response.json();
-  return { ...JSON.parse(data.choices[0].message.content), youtubeId: videoId, youtubeUrl: url };
+  const text = data.content[0].text.trim();
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  return { ...JSON.parse(jsonMatch ? jsonMatch[0] : text), youtubeId: videoId, youtubeUrl: url };
 }
 
 // ── Tesseract OCR Fallback ────────────────────────────────────
@@ -906,7 +917,7 @@ function correctText(text) {
 // ── Processing Steps ──────────────────────────────────────────
 const PROC_STEPS_GPT = [
   { icon: '🔍', label: '이미지 분석 중...' },
-  { icon: '🤖', label: 'GPT-4o에 전송 중...' },
+  { icon: '🤖', label: 'Claude에 전송 중...' },
   { icon: '🥕', label: '재료 추출 중...' },
   { icon: '👨‍🍳', label: '조리 순서 정리 중...' },
   { icon: '✅', label: '완성!' },
@@ -955,21 +966,21 @@ async function startProcessing(file) {
   document.getElementById('preview-img').src = dataUrl;
   showScreen('processing', 'forward');
 
-  const hasKey = !!getOpenAIKey();
+  const hasKey = !!getAnthropicKey();
   const steps = hasKey ? PROC_STEPS_GPT : PROC_STEPS_OCR;
   renderProcSteps(steps);
-  setProgress(0, hasKey ? 'GPT-4o로 분석 시작...' : 'OCR 분석 시작...');
+  setProgress(0, hasKey ? 'Claude로 분석 시작...' : 'OCR 분석 시작...');
 
   try {
     let recipe;
 
     if (hasKey) {
-      // ── GPT-4o Vision path ──────────────────────────
+      // ── Claude Vision path ──────────────────────────
       activateStep(0); setProgress(8, '이미지 준비 중...');
       await delay(400);
 
       activateStep(1);
-      const gptResult = await analyzeImageWithGPT(dataUrl, (pct, label) => setProgress(pct, label));
+      const gptResult = await analyzeImageWithClaude(dataUrl, (pct, label) => setProgress(pct, label));
       activateStep(2); setProgress(82, '재료 정리 중...'); await delay(300);
       activateStep(3); setProgress(92, '순서 정리 중...'); await delay(300);
       activateStep(4); setProgress(100, '완성!'); await delay(400);
@@ -1160,7 +1171,7 @@ function renderResult(r) {
     <div class="result-confidence ${cls}">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span>${lbl} (${pct}%)</span>
-        ${r.gptAnalyzed ? '<span class="ai-chip">🤖 GPT-4o</span>' : '<span class="ai-chip">🔤 OCR</span>'}
+        ${r.gptAnalyzed ? '<span class="ai-chip">🤖 Claude</span>' : '<span class="ai-chip">🔤 OCR</span>'}
       </div>
       <div class="conf-bar-track"><div class="conf-bar-fill" style="width:${pct}%"></div></div>
       ${r.aiSummary ? `<p style="font-size:13px;font-weight:400;opacity:0.85;margin-top:2px">${esc(r.aiSummary)}</p>` : ''}
@@ -1516,13 +1527,13 @@ function showAPIKeyPrompt(onSave) {
       <div class="sheet-handle"></div>
       <h3 class="sheet-title">🤖 AI 분석 설정</h3>
       <p style="font-size:14px;color:var(--label-2);line-height:1.6;margin-bottom:16px">
-        OpenAI API 키를 입력하면 <strong>GPT-4o Vision</strong>으로<br>
+        Anthropic API 키를 입력하면 <strong>Claude Vision</strong>으로<br>
         스크린샷을 훨씬 정확하게 분석해요.<br>
         키는 이 기기에만 저장되며 외부로 전송되지 않아요.
       </p>
       <div class="fridge-input-wrap" style="margin-bottom:12px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <input id="apikey-input" type="password" placeholder="sk-..." value="${getOpenAIKey()}"
+        <input id="apikey-input" type="password" placeholder="sk-ant-..." value="${getAnthropicKey()}"
           style="flex:1;border:none;background:none;outline:none;font-size:15px;font-family:monospace" />
       </div>
       <p style="font-size:11px;color:var(--label-3);margin-bottom:20px">
@@ -1540,8 +1551,8 @@ function showAPIKeyPrompt(onSave) {
 
 function saveAPIKey() {
   const key = document.getElementById('apikey-input')?.value.trim() || '';
-  if (key && !key.startsWith('sk-')) { showToast('올바른 API 키 형식이 아닙니다 (sk-로 시작)'); return; }
-  saveOpenAIKey(key);
+  if (key && !key.startsWith('sk-ant-')) { showToast('올바른 Anthropic API 키 형식이 아닙니다 (sk-ant-로 시작)'); return; }
+  saveAnthropicKey(key);
   document.getElementById('apikey-modal')?.remove();
   if (window._apiKeySaveCallback) window._apiKeySaveCallback();
 }
