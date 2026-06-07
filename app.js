@@ -87,18 +87,27 @@ function saveDB() {
 function getGeminiKey() { return localStorage.getItem('sr_gemini_key') || ''; }
 function saveGeminiKey(k) { localStorage.setItem('sr_gemini_key', k.trim()); }
 
-const GEMINI_URL = key =>
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+const GEMINI_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+];
 
-async function callGemini(key, parts) {
-  const res = await fetch(GEMINI_URL(key), {
+const GEMINI_URL = (key, model) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+async function callGeminiModel(key, model, parts) {
+  const res = await fetch(GEMINI_URL(key, model), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts }] }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Gemini 오류 (${res.status})`);
+    const msg = err?.error?.message || `Gemini 오류 (${res.status})`;
+    const isQuota = res.status === 429 || msg.includes('quota') || msg.includes('Quota') || msg.includes('limit');
+    throw Object.assign(new Error(msg), { isQuota, status: res.status });
   }
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
@@ -106,6 +115,20 @@ async function callGemini(key, parts) {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('레시피 JSON을 찾을 수 없습니다');
   return JSON.parse(match[0]);
+}
+
+async function callGemini(key, parts, onModelChange) {
+  let lastErr;
+  for (const model of GEMINI_MODELS) {
+    try {
+      if (onModelChange) onModelChange(model);
+      return await callGeminiModel(key, model, parts);
+    } catch (err) {
+      lastErr = err;
+      if (!err.isQuota && err.status !== 404) throw err; // non-quota error → don't retry
+    }
+  }
+  throw lastErr;
 }
 
 async function analyzeImageWithGemini(imageDataUrl, onProgress) {
@@ -117,7 +140,7 @@ async function analyzeImageWithGemini(imageDataUrl, onProgress) {
   const result = await callGemini(key, [
     { inlineData: { mimeType, data: b64 } },
     { text: RECIPE_PROMPT + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
-  ]);
+  ], m => onProgress(20, `Gemini (${m}) 분석 중...`));
   onProgress(85, '레시피 정리 중...');
   return result;
 }
@@ -128,7 +151,7 @@ async function analyzeYouTubeWithGemini(url, videoTitle, onProgress) {
   onProgress(40, 'Gemini로 레시피 추출 중...');
   const result = await callGemini(key, [{
     text: `다음 YouTube 요리 영상을 보고 레시피를 추출하세요.\n영상 제목: "${videoTitle}"\n영상 URL: ${url}\n\n${RECIPE_PROMPT}\n\n확실하지 않은 수량은 "적당량"으로 표기하세요.\nReturn ONLY the raw JSON object, no markdown, no code blocks.`,
-  }]);
+  }], m => onProgress(50, `${m} 모델로 분석 중...`));
   onProgress(90, '정리 중...');
   return result;
 }
@@ -739,9 +762,32 @@ async function analyzeYTURL() {
     showScreen('result', 'forward');
   } catch (err) {
     console.error(err);
-    showToast(`오류: ${err.message}`);
-    setTimeout(() => showScreen('home', 'back'), 2500);
+    showScreen('home', 'back');
+    setTimeout(() => showAIError(err.message), 400);
   }
+}
+
+function showAIError(msg) {
+  const isQuota = msg && (msg.includes('quota') || msg.includes('Quota') || msg.includes('limit') || msg.includes('RESOURCE_EXHAUSTED'));
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="font-size:36px;text-align:center;margin-bottom:12px">${isQuota ? '⚠️' : '❌'}</div>
+      <h3 style="margin:0 0 10px;font-size:17px;font-weight:700;text-align:center;color:#1a1108">
+        ${isQuota ? 'API 쿼터 초과' : 'AI 분석 실패'}
+      </h3>
+      <p style="margin:0 0 16px;font-size:14px;color:#4a3d2e;line-height:1.6;text-align:center">
+        ${isQuota
+          ? '현재 API 키의 무료 한도를 초과했거나, 이 프로젝트에서 Gemini 무료 티어가 비활성화되어 있습니다.<br><br><b>해결 방법:</b><br>1. <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#cc5500">aistudio.google.com/apikey</a> 에서 새 API 키 생성<br>2. 앱에서 API 키 재입력'
+          : `오류: ${msg}`}
+      </p>
+      <div style="display:flex;gap:10px">
+        <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:12px;border:1.5px solid #e8ddd0;border-radius:12px;background:#fff;font-size:15px;cursor:pointer;color:#4a3d2e">닫기</button>
+        ${isQuota ? `<button onclick="this.closest('[style*=fixed]').remove();localStorage.removeItem('sr_gemini_key');showGeminiKeyPrompt(()=>{})" style="flex:1;padding:12px;border:none;border-radius:12px;background:#cc5500;color:#fff;font-size:15px;font-weight:600;cursor:pointer">키 재입력</button>` : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 function editRecipe(id) {
@@ -872,8 +918,8 @@ async function startProcessing(file) {
       if (err.message === 'no_key') {
         showGeminiKeyPrompt(() => startProcessing(file));
       } else {
-        showToast(`Gemini 오류: ${err.message}`);
-        setTimeout(() => showScreen('home', 'back'), 2500);
+        showScreen('home', 'back');
+        setTimeout(() => showAIError(err.message), 400);
       }
     }
   } else {
