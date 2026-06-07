@@ -9,30 +9,29 @@
 const SEED_RECIPES = [];
 
 // ── Recipe Extraction Prompt ──────────────────────────────────
-const RECIPE_PROMPT = `당신은 한국 요리 레시피 전문 AI입니다. 주어진 정보를 분석해 최대한 정확하고 상세한 레시피를 추출하세요.
+const RECIPE_PROMPT = `당신은 한국 요리 레시피 전문 AI입니다. 주어진 정보를 분석해 정확하고 상세한 레시피를 추출하세요.
 
-반드시 아래 JSON 구조만 반환하세요 (마크다운, 코드블록 금지):
+반드시 아래 JSON 구조만 반환하세요 (마크다운·코드블록 절대 금지, JSON만):
 {
-  "title": "정확한 레시피 이름 (예: 제육볶음, 카르보나라)",
+  "title": "정확한 요리 이름 (예: 제육볶음, 카르보나라)",
   "category": "한식 또는 일식 또는 중식 또는 양식 또는 디저트 또는 음료 또는 간식 또는 채식 또는 기타",
   "ingredients": [
-    {"name": "재료명", "amount": "정확한 수량과 단위 (예: 300g, 2큰술, 1개)"}
+    {"name": "재료명", "amount": "반드시 구체적인 수량과 단위 (예: 500g, 2큰술, 3T, 1개, 1/2컵)"}
   ],
   "steps": [
-    "1단계: 구체적인 조리 방법을 완전한 문장으로",
-    "2단계: 온도, 시간, 불 세기 등 세부 정보 포함"
+    "구체적인 조리 방법 (온도·시간·불 세기 포함)"
   ],
   "source": {"type": "youtube", "handle": "채널명"},
-  "tags": ["핵심 키워드 태그"],
-  "summary": "이 요리의 특징을 한 줄로"
+  "tags": ["핵심 태그"],
+  "summary": "이 요리의 특징 한 줄"
 }
 
-중요 규칙:
-- 재료는 모든 것을 빠짐없이 (양념, 고명 포함), 수량은 최대한 구체적으로
-- 조리 단계는 초보자도 따라할 수 있게 순서대로 상세히
-- 정확하지 않은 수량은 "적당량" 대신 일반적인 분량 추정값 사용
-- 제목은 영상의 실제 요리 이름으로 (채널명 X)
-- 반드시 한국어로 작성`;
+⚠️ 절대 규칙 (어기면 안 됨):
+- amount 필드에 "적당량" "약간" "조금" 절대 사용 금지 — 반드시 g·ml·큰술·작은술·개 등 단위로 표기
+- 수량이 불확실하면 일반 레시피 기준 추정값 사용 (예: "1큰술", "200ml", "2꼬집")
+- 재료는 양념·고명 포함 모든 재료 나열
+- 조리 단계 최소 5단계 이상
+- 모든 텍스트 한국어로 작성 (외국어 번역 필수)`;
 
 // ── OCR Fallback Corrections ──────────────────────────────────
 const CORRECTIONS = {
@@ -159,32 +158,33 @@ async function analyzeYouTubeWithGroq(url, videoTitle, descText, onProgress) {
 
   let content;
   if (descText && descText.length > 30) {
-    // Use actual description/transcript content — highest accuracy
-    content = `다음은 YouTube 요리 영상의 실제 설명란 내용입니다. 이 내용을 분석해서 레시피를 추출하세요.
+    // Use actual description — extract exact amounts from it
+    content = `아래는 YouTube 요리 영상의 실제 설명란 내용입니다. 이것을 바탕으로 레시피를 추출하세요.
 
 영상 제목: "${videoTitle}"
-영상 URL: ${url}
 
-=== 설명란 원문 (번역 필요 시 한국어로 번역) ===
+=== 설명란 원문 ===
 ${descText}
-=== 설명란 끝 ===
+=== 끝 ===
 
-위 설명란 내용에 있는 실제 재료와 조리법을 그대로 추출하세요.
-수량, 재료명, 조리 순서를 설명란 원문 기준으로 정확히 작성하고, 영어/외국어는 한국어로 번역하세요.
+지시사항:
+- 설명란에 나온 재료와 수량을 그대로 추출 (예: "500g", "2T", "3큰술" 등 원문 수량 유지)
+- 영어·외국어 재료명과 수량을 한국어로 번역 (2T → 2큰술, 1t → 1작은술 등)
+- 조리 순서도 설명란의 순서를 그대로 한국어로 번역
+- 설명란에 없는 내용은 추가하지 말 것
 
 ${RECIPE_PROMPT}`;
   } else {
-    // Fallback: use title only
+    // No description — use general recipe knowledge with specific amounts
     content = `다음 YouTube 요리 영상의 레시피를 추출하세요.
 
 영상 제목: "${videoTitle}"
 영상 URL: ${url}
 
-위 영상 제목을 바탕으로:
-1. 정확한 요리 이름을 title로 사용
-2. 이 요리의 표준 레시피를 최대한 상세하게 작성
-3. 일반적인 분량(2인분 기준)으로 재료와 수량 제시
-4. 조리 단계는 최소 5단계 이상 상세히
+이 요리의 정확한 레시피를 2인분 기준으로 작성하세요:
+- 재료 수량: 반드시 g·ml·큰술·작은술·개 등 구체적 단위 사용 ("적당량" 금지)
+- 조리 단계: 최소 6단계 이상, 온도·시간 등 세부 정보 포함
+- 한국 가정에서 실제로 만들 수 있는 현실적인 레시피
 
 ${RECIPE_PROMPT}`;
   }
@@ -722,7 +722,14 @@ function switchUploadTab(tab) {
   document.getElementById(`utab-${tab}`).classList.add('active');
   document.getElementById('upload-photo-panel').classList.toggle('hidden', tab !== 'photo');
   document.getElementById('upload-yt-panel').classList.toggle('hidden', tab !== 'youtube');
-  if (tab === 'youtube') setTimeout(() => document.getElementById('yt-url-input')?.focus(), 200);
+  if (tab === 'youtube') {
+    // Open description area by default
+    const descArea = document.getElementById('yt-desc-area');
+    const chevron = document.getElementById('yt-desc-chevron');
+    if (descArea) descArea.classList.remove('hidden');
+    if (chevron) chevron.style.transform = 'rotate(180deg)';
+    setTimeout(() => document.getElementById('yt-url-input')?.focus(), 200);
+  }
 }
 
 async function pasteYTURL() {

@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="manifest.json" />
   <title>SnapRecipe</title>
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
 
@@ -147,7 +147,7 @@
           <svg id="yt-desc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;transition:transform 0.2s"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div id="yt-desc-area" class="yt-desc-area hidden">
-          <p class="yt-desc-hint">유튜브 영상 설명란(더보기)의 재료·레시피 내용을 복사해서 붙여넣으세요.<br>영어로 써있어도 자동 번역합니다.</p>
+          <p class="yt-desc-hint">유튜브 설명란(더보기)에서 재료·레시피 부분을 복사해서 붙여넣으세요. 영어도 자동 번역 + 정확한 수량 추출됩니다.</p>
           <textarea id="yt-desc-input" class="yt-desc-textarea" placeholder="재료 목록, 조리 순서 등 설명란 내용을 붙여넣어 주세요..." rows="6"></textarea>
           <button class="yt-desc-paste-btn" onclick="pasteDescText()">클립보드에서 붙여넣기</button>
         </div>
@@ -388,6 +388,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
