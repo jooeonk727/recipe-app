@@ -1185,8 +1185,15 @@ function renderResult(r) {
         <div class="field-group">
           <span class="field-label">출처</span>
           <div class="source-row">
-            <span class="source-emoji">${r.source?.type === 'instagram' ? '📸' : r.source?.type === 'youtube' ? '▶️' : '🔗'}</span>
+            <span class="source-emoji" id="res-source-emoji">${r.source?.type === 'instagram' ? '📸' : r.source?.type === 'youtube' ? '▶️' : '🔗'}</span>
             <input class="source-input" id="res-source-handle" value="${esc(r.source?.handle || '')}" placeholder="@계정 또는 채널명" />
+          </div>
+        </div>
+        <div class="field-group">
+          <span class="field-label">링크 URL</span>
+          <div class="source-row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;flex-shrink:0;stroke:var(--label-3)"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <input class="source-input" id="res-source-url" value="${esc(r.source?.url || '')}" placeholder="https://instagram.com/p/... 또는 youtube.com/..." oninput="onSourceURLChange(this.value)" />
           </div>
         </div>
       </div>
@@ -1305,12 +1312,30 @@ function rerenderTags() {
 }
 
 // ── Save ──────────────────────────────────────────────────────
+function onSourceURLChange(url) {
+  url = url.trim();
+  const emoji = document.getElementById('res-source-emoji');
+  if (!emoji) return;
+  if (/instagram\.com|instagr\.am/.test(url)) emoji.textContent = '📸';
+  else if (/youtube\.com|youtu\.be/.test(url)) emoji.textContent = '▶️';
+  else if (url) emoji.textContent = '🔗';
+  else emoji.textContent = '🔗';
+}
+
 function saveRecipe() {
   if (!state.pendingResult) return;
   const r = state.pendingResult;
   r.title = document.getElementById('res-title')?.value || r.title;
   r.category = document.getElementById('res-category')?.value || r.category;
   r.source.handle = document.getElementById('res-source-handle')?.value || r.source.handle;
+  const sourceUrl = document.getElementById('res-source-url')?.value?.trim() || '';
+  r.source.url = sourceUrl;
+  if (/instagram\.com|instagr\.am/.test(sourceUrl)) r.source.type = 'instagram';
+  else if (/youtube\.com|youtu\.be/.test(sourceUrl)) {
+    r.source.type = 'youtube';
+    const ytId = extractYouTubeId(sourceUrl);
+    if (ytId) { r.youtubeId = ytId; r.thumbnail = r.thumbnail || `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`; }
+  } else if (sourceUrl) r.source.type = 'other';
   r.ingredients = Array.from(document.querySelectorAll('#res-ings .ing-row')).map(row => ({
     name: row.querySelector('.ing-name-in')?.value || '',
     amount: row.querySelector('.ing-amt-in')?.value || '',
