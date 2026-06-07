@@ -1413,7 +1413,7 @@ function showGeminiKeyPrompt(onSave) {
       </p>
       <div class="fridge-input-wrap" style="margin-bottom:12px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;flex-shrink:0;stroke:var(--accent)"><path d="M21 2H3v16h5v4l4-4h5l4-4V2zM11 11V7M16 11V7"/></svg>
-        <input id="gemini-key-input" type="password" placeholder="AIza..."
+        <input id="gemini-key-input" type="password" placeholder="AIza... 또는 AQ...."
           value="${getGeminiKey()}"
           style="flex:1;border:none;background:none;outline:none;font-size:15px;font-family:monospace;color:var(--label)" />
       </div>
@@ -1430,7 +1430,6 @@ function showGeminiKeyPrompt(onSave) {
 function saveGeminiKeyAndContinue() {
   const key = document.getElementById('gemini-key-input')?.value.trim() || '';
   if (!key) { showToast('API 키를 입력해주세요'); return; }
-  if (!key.startsWith('AIza')) { showToast('올바른 Gemini 키 형식이 아닙니다 (AIza로 시작)'); return; }
   saveGeminiKey(key);
   document.getElementById('gemini-key-modal')?.remove();
   if (window._geminiKeyCb) { window._geminiKeyCb(); window._geminiKeyCb = null; }
