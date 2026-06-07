@@ -139,10 +139,21 @@ async function analyzeImageWithGroq(imageDataUrl, onProgress) {
   const key = getAIKey();
   if (!key) throw new Error('no_key');
   onProgress(20, 'Groq AI에 이미지 전송 중...');
+  const imagePrompt = `이 이미지를 분석해서 레시피를 추출하세요.
+
+이미지에 텍스트가 있으면:
+- 모든 텍스트를 정확히 읽어서 재료와 조리법을 추출하세요
+- 영어·일본어 등 외국어는 반드시 한국어로 번역하세요
+- "500g" "2T" "1t" 같은 수량 단위도 그대로 읽어서 한국 단위로 변환 (2T → 2큰술, 1t → 1작은술)
+
+이미지가 요리 사진이면:
+- 보이는 요리를 분석해서 레시피를 추정하세요
+
+${RECIPE_PROMPT}`;
   const messages = [{
     role: 'user',
     content: [
-      { type: 'text', text: RECIPE_PROMPT + '\n\nReturn ONLY the raw JSON object, no markdown, no code blocks.' },
+      { type: 'text', text: imagePrompt },
       { type: 'image_url', image_url: { url: imageDataUrl } },
     ],
   }];
@@ -512,10 +523,14 @@ function renderHome() {
   const grid = document.getElementById('recipe-grid');
   const empty = document.getElementById('empty-state');
   if (!grid) return;
-  // Ensure FAB and nav are visible on home
   document.getElementById('bottom-nav')?.classList.add('visible');
   document.getElementById('fab')?.classList.add('visible');
   const cat = state.filters.category || 'all';
+  // Sync segment bar UI to match current filter
+  document.querySelectorAll('.segment').forEach(btn => {
+    const btnCat = btn.getAttribute('onclick')?.match(/'([^']+)'\)/)?.[1] || '';
+    btn.classList.toggle('active', btnCat === cat);
+  });
   const recipes = state.recipes
     .filter(r => cat === 'all' || r.category === cat)
     .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
@@ -1401,6 +1416,9 @@ function saveRecipe() {
   }
   saveDB();
   state.pendingResult = null;
+  // Reset to 전체 so user always sees the newly saved recipe
+  state.filters.category = 'all';
+  state.filters.source = '';
   showToast('저장됐어요! 🎉');
   showScreen('home', 'back');
 }
