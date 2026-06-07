@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SnapRecipe" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="manifest" href="manifest.json" />
+  <title>SnapRecipe</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── SPLASH ── -->
+<div id="screen-splash" class="screen active">
+  <div class="splash-bg"></div>
+  <div class="splash-content">
+    <div class="splash-icon">
+      <span>📸</span>
+    </div>
+    <h1 class="splash-title">SnapRecipe</h1>
+    <p class="splash-sub">스크린샷 한 장이면 레시피 완성</p>
+  </div>
+  <div class="splash-footer">
+    <div class="splash-dots">
+      <div class="dot active"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOGIN ── -->
+<div id="screen-login" class="screen">
+  <div class="login-scene">
+    <div class="login-art">
+      <div class="login-icon-wrap">
+        <div class="login-icon-ring ring1"></div>
+        <div class="login-icon-ring ring2"></div>
+        <div class="login-icon-ring ring3"></div>
+        <div class="login-icon-core">📸</div>
+      </div>
+      <h1 class="login-app-name">SnapRecipe</h1>
+      <p class="login-tagline">인스타그램·유튜브 레시피를<br>사진 한 장으로 자동 정리</p>
+    </div>
+    <div class="login-actions">
+      <button class="login-btn kakao" onclick="handleLogin('kakao')">
+        <div class="login-btn-icon">💬</div>
+        <span>카카오로 시작하기</span>
+      </button>
+      <button class="login-btn google" onclick="handleLogin('google')">
+        <div class="login-btn-icon google-g">G</div>
+        <span>Google로 시작하기</span>
+      </button>
+      <button class="login-btn-ghost" onclick="handleLogin('guest')">둘러보기</button>
+      <p class="login-terms">로그인 정보는 이 기기에만 저장됩니다</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── HOME ── -->
+<div id="screen-home" class="screen">
+  <div class="nav-bar" id="home-nav">
+    <h1 class="nav-large-title">SnapRecipe</h1>
+    <div class="nav-bar-actions">
+      <button class="nav-icon-btn" onclick="toggleSearch()" id="search-toggle-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      </button>
+      <button class="nav-icon-btn" onclick="toggleSortMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+      </button>
+      <button class="nav-avatar" id="profile-avatar" onclick="showProfile()">👤</button>
+    </div>
+  </div>
+  <div id="sort-menu" class="dropdown-menu hidden">
+    <button class="dropdown-item" onclick="applySort('newest')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"/></svg>
+      최신순
+    </button>
+    <button class="dropdown-item" onclick="applySort('oldest')">오래된순</button>
+    <button class="dropdown-item" onclick="applySort('favorite')">즐겨찾기순</button>
+    <button class="dropdown-item" onclick="applySort('name')">이름순</button>
+  </div>
+  <div id="search-bar" class="search-bar hidden">
+    <div class="search-input-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" type="search" placeholder="레시피, 재료, 태그 검색" oninput="applyFilters()" />
+      <button onclick="clearSearch()" id="search-clear-btn" class="hidden">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+      </button>
+    </div>
+    <button class="search-cancel-btn" onclick="cancelSearch()">취소</button>
+  </div>
+  <div class="segment-bar" id="cat-segment">
+    <button class="segment active" onclick="selectCategory(this,'all')">전체</button>
+    <button class="segment" onclick="selectCategory(this,'한식')">한식</button>
+    <button class="segment" onclick="selectCategory(this,'양식')">양식</button>
+    <button class="segment" onclick="selectCategory(this,'일식')">일식</button>
+    <button class="segment" onclick="selectCategory(this,'중식')">중식</button>
+    <button class="segment" onclick="selectCategory(this,'디저트')">디저트</button>
+    <button class="segment" onclick="selectCategory(this,'음료')">음료</button>
+    <button class="segment" onclick="selectCategory(this,'간식')">간식</button>
+    <button class="segment" onclick="selectCategory(this,'채식')">채식</button>
+  </div>
+  <!-- 크리에이터 랭킹 -->
+  <div class="ranking-section" id="ranking-section">
+    <div class="ranking-header">
+      <span class="ranking-title">🏆 크리에이터 랭킹</span>
+      <button class="ranking-more" onclick="showScreen('sources','forward')">전체보기</button>
+    </div>
+    <div class="ranking-scroll" id="ranking-scroll"></div>
+  </div>
+
+  <p class="list-header" id="recipe-count"></p>
+  <div id="recipe-grid" class="recipe-grid"></div>
+  <div id="empty-state" class="empty-view hidden">
+    <div class="empty-icon-wrap">📭</div>
+    <p class="empty-heading">레시피가 없어요</p>
+    <p class="empty-body">+ 버튼으로 첫 레시피를 추가해보세요</p>
+  </div>
+</div>
+
+<!-- ── SOURCES RANKING ── -->
+<div id="screen-sources" class="screen">
+  <div class="nav-bar secondary">
+    <button class="nav-back-btn" onclick="showScreen('home','back')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <h2 class="nav-title">크리에이터 랭킹</h2>
+    <div style="width:44px"></div>
+  </div>
+  <div class="sources-scroll" id="sources-body"></div>
+</div>
+
+<!-- ── UPLOAD ── -->
+<div id="screen-upload" class="screen">
+  <div class="nav-bar secondary">
+    <button class="nav-back-btn" onclick="showScreen('home','back')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <h2 class="nav-title">레시피 추가</h2>
+    <div style="width:40px"></div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="upload-tab-bar">
+    <button class="utab active" id="utab-photo" onclick="switchUploadTab('photo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      사진
+    </button>
+    <button class="utab" id="utab-youtube" onclick="switchUploadTab('youtube')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58a2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="currentColor" stroke="none"/></svg>
+      YouTube
+    </button>
+  </div>
+
+  <!-- 사진 패널 -->
+  <div id="upload-photo-panel" class="upload-body">
+    <div class="upload-zone" id="upload-area"
+         ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)"
+         onclick="document.getElementById('file-input').click()">
+      <div class="upload-zone-inner">
+        <div class="upload-art">
+          <div class="upload-art-circles">
+            <div class="uac uac1"></div><div class="uac uac2"></div><div class="uac uac3"></div>
+          </div>
+          <span class="upload-art-icon">📷</span>
+        </div>
+        <p class="upload-zone-title">사진 업로드</p>
+        <p class="upload-zone-body">인스타그램·유튜브·블로그<br>레시피 화면을 캡처해서 올려주세요</p>
+        <div class="upload-zone-badge">JPG · PNG · WEBP</div>
+      </div>
+      <input id="file-input" type="file" accept="image/*" multiple style="display:none" onchange="handleFileSelect(event)" />
+    </div>
+    <div class="upload-tips">
+      <div class="tip-item"><span class="tip-icon">✍️</span><p>글자가 선명할수록 더 정확하게 인식해요</p></div>
+      <div class="tip-item"><span class="tip-icon">📐</span><p>재료 목록과 조리 순서가 모두 보이면 완벽해요</p></div>
+    </div>
+  </div>
+
+  <!-- YouTube 패널 -->
+  <div id="upload-yt-panel" class="upload-body hidden">
+    <div class="yt-input-card">
+      <div class="yt-logo-row">
+        <svg class="yt-logo" viewBox="0 0 24 24" fill="#FF0000"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58a2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white"/></svg>
+        <p class="yt-input-title">YouTube 링크로 레시피 추출</p>
+      </div>
+      <p class="yt-input-desc">요리 영상 URL을 붙여넣으면<br>GPT-4o가 레시피를 자동으로 추출해요</p>
+      <div class="yt-url-wrap">
+        <input id="yt-url-input" type="url" class="yt-url-input"
+               placeholder="https://youtube.com/watch?v=..."
+               oninput="onYTInputChange()" onkeydown="if(event.key==='Enter')analyzeYTURL()" />
+        <button class="yt-paste-btn" onclick="pasteYTURL()">붙여넣기</button>
+      </div>
+      <div id="yt-preview" class="yt-preview hidden"></div>
+      <button class="yt-analyze-btn" id="yt-analyze-btn" onclick="analyzeYTURL()" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
+        레시피 추출하기
+      </button>
+    </div>
+    <div class="upload-tips">
+      <div class="tip-item"><span class="tip-icon">🎬</span><p>쿠킹 채널 영상 URL을 그대로 붙여넣으세요</p></div>
+      <div class="tip-item"><span class="tip-icon">🤖</span><p>GPT-4o가 제목·재료·순서를 자동으로 정리해요</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PROCESSING ── -->
+<div id="screen-processing" class="screen proc-screen">
+  <div class="proc-card">
+    <div class="proc-thumb-wrap">
+      <img id="preview-img" src="" alt="" />
+      <div class="proc-thumb-overlay"></div>
+    </div>
+    <div class="proc-info">
+      <div class="proc-spinner-ring"></div>
+      <h2 class="proc-step-label" id="proc-title">분석 중...</h2>
+      <p class="proc-step-sub" id="proc-sub">잠시만 기다려 주세요</p>
+    </div>
+    <div class="proc-progress-area">
+      <div class="proc-progress-track">
+        <div class="proc-progress-fill" id="proc-fill"></div>
+      </div>
+      <span class="proc-pct-label" id="proc-pct">0%</span>
+    </div>
+    <div id="proc-steps" class="proc-step-list"></div>
+  </div>
+</div>
+
+<!-- ── RESULT ── -->
+<div id="screen-result" class="screen">
+  <div class="nav-bar secondary">
+    <button class="nav-back-btn" onclick="showScreen('home','back')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <h2 class="nav-title">결과 확인</h2>
+    <button class="nav-action-btn" onclick="saveRecipe()">저장</button>
+  </div>
+  <div class="result-scroll" id="result-body"></div>
+</div>
+
+<!-- ── DETAIL ── -->
+<div id="screen-detail" class="screen">
+  <div class="detail-hero" id="detail-hero">
+    <div class="detail-hero-overlay"></div>
+    <div class="detail-hero-nav">
+      <button class="hero-btn" onclick="goBack()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="hero-btn-group">
+        <button class="hero-btn" id="detail-fav-btn" onclick="toggleFavoriteDetail()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </button>
+        <button class="hero-btn" onclick="shareRecipe()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="detail-hero-info" id="detail-hero-text"></div>
+  </div>
+  <div class="detail-content" id="detail-body"></div>
+</div>
+
+<!-- ── SCREENSHOTS ── -->
+<div id="screen-screenshots" class="screen">
+  <div class="nav-bar">
+    <h1 class="nav-large-title">보관함</h1>
+    <div class="nav-bar-actions">
+      <button class="nav-icon-btn" onclick="document.getElementById('ss-file-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <input id="ss-file-input" type="file" accept="image/*" style="display:none" onchange="handleFileSelect(event)" />
+  </div>
+  <div class="filter-pills">
+    <button class="fpill active" data-f="all" onclick="filterGallery(this,'all')">전체</button>
+    <button class="fpill" data-f="pending" onclick="filterGallery(this,'pending')">미처리</button>
+    <button class="fpill" data-f="done" onclick="filterGallery(this,'done')">변환 완료</button>
+  </div>
+  <div id="screenshot-grid" class="ss-grid"></div>
+  <div id="gallery-empty" class="empty-view hidden">
+    <div class="empty-icon-wrap">🖼️</div>
+    <p class="empty-heading">보관함이 비어있어요</p>
+    <p class="empty-body">레시피 사진을 올리면 여기에 모여요</p>
+  </div>
+</div>
+
+<!-- ── FRIDGE ── -->
+<div id="screen-fridge" class="screen">
+  <div class="nav-bar">
+    <h1 class="nav-large-title">냉장고</h1>
+  </div>
+  <div class="fridge-body">
+    <div class="fridge-input-card">
+      <p class="fridge-hint">가지고 있는 재료를 입력하면<br>만들 수 있는 레시피를 찾아드려요</p>
+      <div class="fridge-row">
+        <div class="fridge-input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="5" y1="10" x2="19" y2="10"/></svg>
+          <input id="fridge-input" type="text" placeholder="재료 입력 (예: 두부, 달걀)" onkeydown="addFridgeItem(event)" />
+        </div>
+        <button class="fridge-add-btn" onclick="addFridgeItemBtn()">추가</button>
+      </div>
+      <div id="fridge-tags" class="fridge-chip-row"></div>
+    </div>
+    <button class="primary-action-btn" onclick="searchFridge()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      이 재료로 만들 수 있는 레시피 찾기
+    </button>
+    <div id="fridge-results"></div>
+  </div>
+</div>
+
+<!-- ── PLANNER ── -->
+<div id="screen-planner" class="screen">
+  <div class="nav-bar">
+    <h1 class="nav-large-title">식단 플래너</h1>
+    <div class="nav-bar-actions">
+      <button class="nav-text-btn" onclick="clearWeeklyPlan()">초기화</button>
+    </div>
+  </div>
+  <div id="planner-body" class="planner-scroll"></div>
+</div>
+
+<!-- ── BOTTOM TAB BAR ── -->
+<nav id="bottom-nav" class="tab-bar">
+  <button class="tab-item active" data-screen="home" onclick="switchTab('home')">
+    <div class="tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    <span class="tab-label">홈</span>
+  </button>
+  <button class="tab-item" data-screen="screenshots" onclick="switchTab('screenshots')">
+    <div class="tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    </div>
+    <span class="tab-label">보관함</span>
+  </button>
+  <div class="tab-center-space"></div>
+  <button class="tab-item" data-screen="fridge" onclick="switchTab('fridge')">
+    <div class="tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="5" y1="10" x2="19" y2="10"/></svg>
+    </div>
+    <span class="tab-label">냉장고</span>
+  </button>
+  <button class="tab-item" data-screen="planner" onclick="switchTab('planner')">
+    <div class="tab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    </div>
+    <span class="tab-label">식단</span>
+  </button>
+</nav>
+
+<!-- ── FAB ── -->
+<button id="fab" class="fab" onclick="showScreen('upload','forward')">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<!-- ── SHEET: PROFILE ── -->
+<div id="modal-profile" class="sheet-backdrop hidden" onclick="closeProfile(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="profile-header">
+      <div class="profile-avatar-lg" id="profile-avatar-lg">👤</div>
+      <div>
+        <p class="profile-name" id="profile-name-text">사용자</p>
+        <p class="profile-email" id="profile-email-text"></p>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-cell">
+        <span class="stat-n" id="stat-recipes">0</span>
+        <span class="stat-l">레시피</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-cell">
+        <span class="stat-n" id="stat-favorites">0</span>
+        <span class="stat-l">즐겨찾기</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-cell">
+        <span class="stat-n" id="stat-screenshots">0</span>
+        <span class="stat-l">보관함</span>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="sheet-action-btn" onclick="exportData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        데이터 내보내기
+      </button>
+      <button class="sheet-action-btn danger" onclick="handleLogout()">로그아웃</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SHEET: SCREENSHOT ── -->
+<div id="modal-screenshot" class="sheet-backdrop hidden" onclick="closeScreenshotModal(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="ss-modal-preview">
+      <img id="modal-ss-img" src="" alt="" />
+    </div>
+    <div class="sheet-actions">
+      <button class="sheet-action-btn primary" onclick="reprocessScreenshot()">✨ 다시 분석</button>
+      <button class="sheet-action-btn" onclick="goToRecipeFromModal()">레시피 보기</button>
+      <button class="sheet-action-btn danger" onclick="deleteScreenshot()">삭제</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SHEET: PLANNER PICKER ── -->
+<div id="modal-planner" class="sheet-backdrop hidden" onclick="closePlannerModal(event)">
+  <div class="sheet sheet-tall">
+    <div class="sheet-handle"></div>
+    <h3 class="sheet-title" id="planner-modal-title">레시피 선택</h3>
+    <div id="planner-recipe-list" class="picker-list"></div>
+    <button class="sheet-action-btn" onclick="closePlannerModal()">취소</button>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
