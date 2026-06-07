@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="manifest.json" />
   <title>SnapRecipe</title>
-  <link rel="stylesheet" href="style.css?v=14" />
+  <link rel="stylesheet" href="style.css?v=15" />
 </head>
 <body>
 
@@ -132,7 +132,6 @@
         <svg class="yt-logo" viewBox="0 0 24 24" fill="#FF0000"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58a2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white"/></svg>
         <p class="yt-input-title">YouTube 링크로 레시피 추출</p>
       </div>
-      <p class="yt-input-desc">요리 영상 URL을 붙여넣으면<br>GPT-4o가 레시피를 자동으로 추출해요</p>
       <div class="yt-url-wrap">
         <input id="yt-url-input" type="url" class="yt-url-input"
                placeholder="https://youtube.com/watch?v=..."
@@ -140,14 +139,28 @@
         <button class="yt-paste-btn" onclick="pasteYTURL()">붙여넣기</button>
       </div>
       <div id="yt-preview" class="yt-preview hidden"></div>
+
+      <!-- Description paste area -->
+      <div class="yt-desc-section">
+        <div class="yt-desc-header" onclick="toggleDescArea()">
+          <span class="yt-desc-label">📋 설명란 붙여넣기 <span class="yt-desc-badge">정확도 ↑↑</span></span>
+          <svg id="yt-desc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;transition:transform 0.2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="yt-desc-area" class="yt-desc-area hidden">
+          <p class="yt-desc-hint">유튜브 영상 설명란(더보기)의 재료·레시피 내용을 복사해서 붙여넣으세요.<br>영어로 써있어도 자동 번역합니다.</p>
+          <textarea id="yt-desc-input" class="yt-desc-textarea" placeholder="재료 목록, 조리 순서 등 설명란 내용을 붙여넣어 주세요..." rows="6"></textarea>
+          <button class="yt-desc-paste-btn" onclick="pasteDescText()">클립보드에서 붙여넣기</button>
+        </div>
+      </div>
+
       <button class="yt-analyze-btn" id="yt-analyze-btn" onclick="analyzeYTURL()" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3l14 9-14 9V3z" fill="currentColor"/></svg>
         레시피 추출하기
       </button>
     </div>
     <div class="upload-tips">
-      <div class="tip-item"><span class="tip-icon">🎬</span><p>쿠킹 채널 영상 URL을 그대로 붙여넣으세요</p></div>
-      <div class="tip-item"><span class="tip-icon">🤖</span><p>GPT-4o가 제목·재료·순서를 자동으로 정리해요</p></div>
+      <div class="tip-item"><span class="tip-icon">📋</span><p>설명란 내용을 붙여넣으면 실제 레시피 그대로 추출돼요</p></div>
+      <div class="tip-item"><span class="tip-icon">🌐</span><p>영어·일본어 레시피도 한국어로 자동 번역해요</p></div>
     </div>
   </div>
 </div>
@@ -375,6 +388,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

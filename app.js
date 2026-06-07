@@ -152,13 +152,30 @@ async function analyzeImageWithGroq(imageDataUrl, onProgress) {
   return result;
 }
 
-async function analyzeYouTubeWithGroq(url, videoTitle, onProgress) {
+async function analyzeYouTubeWithGroq(url, videoTitle, descText, onProgress) {
   const key = getAIKey();
   if (!key) throw new Error('no_key');
   onProgress(40, 'Groq AI로 레시피 추출 중...');
-  const messages = [{
-    role: 'user',
-    content: `다음 YouTube 요리 영상의 레시피를 추출하세요.
+
+  let content;
+  if (descText && descText.length > 30) {
+    // Use actual description/transcript content — highest accuracy
+    content = `다음은 YouTube 요리 영상의 실제 설명란 내용입니다. 이 내용을 분석해서 레시피를 추출하세요.
+
+영상 제목: "${videoTitle}"
+영상 URL: ${url}
+
+=== 설명란 원문 (번역 필요 시 한국어로 번역) ===
+${descText}
+=== 설명란 끝 ===
+
+위 설명란 내용에 있는 실제 재료와 조리법을 그대로 추출하세요.
+수량, 재료명, 조리 순서를 설명란 원문 기준으로 정확히 작성하고, 영어/외국어는 한국어로 번역하세요.
+
+${RECIPE_PROMPT}`;
+  } else {
+    // Fallback: use title only
+    content = `다음 YouTube 요리 영상의 레시피를 추출하세요.
 
 영상 제목: "${videoTitle}"
 영상 URL: ${url}
@@ -169,9 +186,10 @@ async function analyzeYouTubeWithGroq(url, videoTitle, onProgress) {
 3. 일반적인 분량(2인분 기준)으로 재료와 수량 제시
 4. 조리 단계는 최소 5단계 이상 상세히
 
-${RECIPE_PROMPT}`,
-  }];
-  const result = await callGroq(key, messages, GROQ_TEXT_MODEL);
+${RECIPE_PROMPT}`;
+  }
+
+  const result = await callGroq(key, [{ role: 'user', content }], GROQ_TEXT_MODEL);
   onProgress(90, '정리 중...');
   return result;
 }
@@ -691,6 +709,12 @@ function resetUploadScreen() {
   if (preview) { preview.classList.add('hidden'); preview.innerHTML = ''; }
   const analyzeBtn = document.getElementById('yt-analyze-btn');
   if (analyzeBtn) analyzeBtn.disabled = true;
+  const descInput = document.getElementById('yt-desc-input');
+  if (descInput) descInput.value = '';
+  const descArea = document.getElementById('yt-desc-area');
+  if (descArea) descArea.classList.add('hidden');
+  const chevron = document.getElementById('yt-desc-chevron');
+  if (chevron) chevron.style.transform = '';
 }
 
 function switchUploadTab(tab) {
@@ -707,6 +731,21 @@ async function pasteYTURL() {
     const inp = document.getElementById('yt-url-input');
     inp.value = text;
     onYTInputChange();
+  } catch (_) { showToast('클립보드 접근이 안 됩니다 — 직접 붙여넣어 주세요'); }
+}
+
+function toggleDescArea() {
+  const area = document.getElementById('yt-desc-area');
+  const chevron = document.getElementById('yt-desc-chevron');
+  const open = area.classList.toggle('hidden');
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+async function pasteDescText() {
+  try {
+    const text = await navigator.clipboard.readText();
+    const ta = document.getElementById('yt-desc-input');
+    if (ta) { ta.value = text; showToast('붙여넣었어요!'); }
   } catch (_) { showToast('클립보드 접근이 안 됩니다 — 직접 붙여넣어 주세요'); }
 }
 
@@ -765,10 +804,11 @@ async function analyzeYTURL() {
     } catch (_) {}
 
     activateStep(1);
+    const descText = document.getElementById('yt-desc-input')?.value?.trim() || '';
     let aiResult = null;
     let aiError = null;
     try {
-      aiResult = await analyzeYouTubeWithGroq(url, videoTitle, (pct, label) => setProgress(pct, label));
+      aiResult = await analyzeYouTubeWithGroq(url, videoTitle, descText, (pct, label) => setProgress(pct, label));
     } catch (err) {
       aiError = err;
     }

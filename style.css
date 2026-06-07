@@ -1166,6 +1166,49 @@ img { display: block; width: 100%; object-fit: cover; pointer-events: none; }
 .yt-analyze-btn:disabled { background: var(--sep-opaque); color: var(--label-3); box-shadow: none; }
 .yt-analyze-btn svg { width: 18px; height: 18px; stroke: none; }
 
+/* Description paste area */
+.yt-desc-section {
+  border: 1.5px solid var(--sep);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.yt-desc-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; cursor: pointer; background: var(--bg-2);
+  user-select: none;
+}
+.yt-desc-header:active { opacity: 0.7; }
+.yt-desc-label { font-size: 13px; font-weight: 600; color: var(--label); }
+.yt-desc-badge {
+  display: inline-block; margin-left: 6px;
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px;
+}
+.yt-desc-area {
+  padding: 12px 14px; background: #fff;
+  border-top: 1px solid var(--sep);
+}
+.yt-desc-area.hidden { display: none; }
+.yt-desc-hint {
+  font-size: 12px; color: var(--label-3); line-height: 1.6; margin-bottom: 10px;
+}
+.yt-desc-textarea {
+  width: 100%; resize: vertical; min-height: 120px;
+  border: 1.5px solid var(--sep); border-radius: 10px;
+  padding: 10px 12px; font-size: 13px; color: var(--label);
+  font-family: inherit; line-height: 1.6;
+  background: var(--bg); box-sizing: border-box;
+}
+.yt-desc-textarea:focus { outline: none; border-color: var(--accent); }
+.yt-desc-paste-btn {
+  margin-top: 8px; width: 100%; padding: 9px;
+  border: 1.5px solid var(--accent); border-radius: 10px;
+  background: transparent; color: var(--accent);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.yt-desc-paste-btn:active { background: var(--accent-light); }
+
 /* YouTube card in detail screen */
 .yt-card {
   position: relative; border-radius: var(--radius-md); overflow: hidden;
